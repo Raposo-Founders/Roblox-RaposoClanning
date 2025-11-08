@@ -37,6 +37,40 @@ export namespace HttpProvider {
       return result.Body;
     }
   }
+
+  export function Get(url: string, headers?: HttpHeaders, maxAttempts = 3, attemptCooldown = 1) {
+    assert(RunService.IsServer(), "Function can only be called from the server.");
+
+    let totalAttempts = 0;
+
+    while (game) {
+      totalAttempts++;
+      if (totalAttempts > maxAttempts) {
+        warn(`Failed to Get "${url}". (MAX_ATTEMPTS_REACHED)`);
+        break;
+      }
+
+      const [success, result] = pcall(() => HttpService.GetAsync(url, true, headers));
+      if (!success) {
+        warn(`Failed to Get "${url}", retrying in ${attemptCooldown} seconds...`);
+        print(result);
+
+        task.wait(attemptCooldown);
+        continue;
+      }
+
+      const [success2, object] = pcall(() => HttpService.JSONDecode(result));
+      if (!success2) {
+        warn(`Failed to JSONDecode URL result, retrying in ${attemptCooldown} seconds...`);
+        print(object);
+
+        task.wait(attemptCooldown);
+        continue;
+      }
+
+      return object;
+    }
+  }
 }
 
 // # Bindings & misc

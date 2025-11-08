@@ -3,6 +3,7 @@ import { defaultEnvironments } from "defaultinsts";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { colorTable, uiValues } from "UI/values";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
+import { menuTabActivated } from "UI/menu/menuprefabs";
 
 // # Constants & variables
 const MAPPED_TEAM_COLOR = new Map<PlayerTeam, Color3>();
@@ -30,6 +31,7 @@ if (RunService.IsClient())
     if (input.KeyCode.Name !== "Tab" || processed) return;
 
     uiValues.hud_gameplay_visible[1](!uiValues.hud_gameplay_visible[0].getValue());
+    menuTabActivated.Fire("Menu", "players");
   });
 
 MAPPED_TEAM_COLOR.set(PlayerTeam.Defenders, Color3.fromHex(colorTable.defendersColor));

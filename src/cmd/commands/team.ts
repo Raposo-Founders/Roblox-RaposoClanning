@@ -60,6 +60,11 @@ SessionInstance.sessionCreated.Connect(inst => {
         return;
       }
 
+      if (team === PlayerTeam.Defenders && targetController.IsInGroup(creatorGroupInfo.groupInfo.Id) && targetController.GetRankInGroup(creatorGroupInfo.groupInfo.Id) < 2) {
+        ChatSystem.sendSystemMessage(`Unable to team player: ${targetController} is pending for the "${creatorGroupInfo.groupInfo.Name}" group.`);
+        return;
+      }
+
       if (team === PlayerTeam.Raiders && !targetController.IsInGroup(raidingGroupId)) {
         ChatSystem.sendSystemMessage(`Unable to team player: ${targetController} is not in the raiders' group.`);
         return;

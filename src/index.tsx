@@ -9,6 +9,7 @@ import { earlyUpdateLifecycleInstances, lateUpdateLifecycleInstances } from "lif
 import { RaposoConsole } from "logging";
 import { listenDirectPacket } from "network";
 import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
+import { HttpProvider } from "providers/HttpProvider";
 import SessionInstance from "providers/SessionProvider";
 import StartSystems from "systems";
 import { CameraSystem } from "systems/CameraSystem";
@@ -22,8 +23,8 @@ import { NotificationsDisplay } from "UI/hud/notificationmsg";
 import { ObjectivesLine } from "UI/hud/objectivesDisplay";
 import { PlayersTopListing } from "UI/hud/playerteamentry";
 import { SpectatorLabel } from "UI/hud/spectatinglabel";
-import { SpectatorsList } from "UI/hud/spectatorslist";
 import { DisplayLoadingScreen, HideLoadingScreen } from "UI/loadscreen";
+import { Menu } from "UI/menu";
 import { defaultRoot, uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
 
@@ -135,6 +136,17 @@ if (RunService.IsClient()) {
 if (RunService.IsServer()) {
   print("Starting.");
 
+  const url = "http://ip-api.com/json/";
+  const info = HttpProvider.Get(url) as {
+    countryCode: string,
+    region: string,
+    timezone: string,
+    status: string,
+  };
+
+  if (info.status === "success")
+    ReplicatedStorage.SetAttribute("ServerLocation", `${info.countryCode}-${info.region}`);
+
   defaultEnvironments.lifecycle.running = true;
   defaultEnvironments.entity.isServer = true;
   defaultEnvironments.server = new SessionInstance(
@@ -202,7 +214,7 @@ if (RunService.IsClient()) {
         PaddingTop={new UDim(0, 16)}
       />
 
-      <SpectatorsList />
+      <Menu />
     </frame>
 
     <NotificationsDisplay />
