@@ -11,6 +11,8 @@ const DEAD_ICON = "rbxassetid://16682879119";
 const DISCONNECTED_ICON = "rbxassetid://73914583608410";
 const DEFAULT_USER_IMAGE = "rbxassetid://76527276016929";
 
+const ENTRY_SIZE = new UDim2(0, 64, 0, 64);
+
 // # Functions
 
 function formatUserImageLabel(userId: number) {
@@ -39,7 +41,7 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
     }
 
     const controller = entity.GetUserFromController();
-    
+
     SetUsername(controller ? controller.Name : entity.id);
     SetKills(entity.stats.kills);
     SetDeaths(entity.stats.deaths);
@@ -82,91 +84,101 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
 
   return (
     <frame
-      AnchorPoint={new Vector2(0.5, 0)}
       BackgroundColor3={accentColor}
       BackgroundTransparency={0.5}
       BorderSizePixel={0}
-      Position={new UDim2(0.5, 0, 1, 40)}
-      Size={UDim2.fromOffset(150, 150)}
+      Position={UDim2.fromScale(0, 0.5)}
+      Size={new UDim2(1, 0, 0, 128)}
       Visible={props.visible}
+      ZIndex={0}
     >
-      <uicorner
-        CornerRadius={new UDim(0, 12)}
+      <textlabel // Username
+        FontFace={new Font(
+          "rbxasset://fonts/families/GothamSSm.json",
+          Enum.FontWeight.SemiBold,
+          Enum.FontStyle.Normal
+        )}
+        Text={usernameBind}
+        TextColor3={Color3.fromHex("#FFFFFF")}
+        TextSize={14}
+        TextStrokeTransparency={0.9}
+        AnchorPoint={new Vector2(0.5, 0)}
+        AutomaticSize={"X"}
+        BackgroundTransparency={1}
+        Position={new UDim2(0.5, 0, 1, 5)}
+        Size={UDim2.fromOffset(0, 14)}
       />
 
       <frame // Content
         BackgroundTransparency={1}
-        Size={UDim2.fromScale(1, 1)}
+        Position={new UDim2(0, 6, 0, ENTRY_SIZE.Y.Offset * 0.5)}
+        Size={new UDim2(1, -12, 1, -ENTRY_SIZE.Y.Offset * 0.5)}
       >
-        <textlabel
-          FontFace={new Font(
-            "rbxasset://fonts/families/GothamSSm.json",
-            Enum.FontWeight.SemiBold,
-            Enum.FontStyle.Normal
-          )}
-          Text={usernameBind}
-          TextColor3={Color3.fromHex("#FFFFFF")}
-          TextSize={14}
-          TextTruncate={"AtEnd"}
-          TextWrapped={true}
-          BackgroundTransparency={1}
-          Size={new UDim2(1, 0, 0, 14)}
+        <uilistlayout
+          SortOrder={"LayoutOrder"}
         />
 
-        <frame // Stats display
-          BackgroundTransparency={1}
-          Position={UDim2.fromOffset(0, 16)}
-          Size={new UDim2(1, 0, 1, -16)}
-        >
-          <uilistlayout
-            SortOrder={"LayoutOrder"}
-          />
-
-          <DisplayLabel Text={killsBind.map(val => `Kills: ${val}`)} LayoutOrder={1} />
-          <DisplayLabel Text={deathsBind.map(val => `Deaths: ${val}`)} LayoutOrder={2} />
-          <DisplayLabel Text={pingBind.map(val => `Ping: ${val}`)} LayoutOrder={3} />
-        </frame>
-
-        <uipadding
-          PaddingBottom={new UDim(0, 6)}
-          PaddingLeft={new UDim(0, 6)}
-          PaddingRight={new UDim(0, 6)}
-          PaddingTop={new UDim(0, 6)}
-        />
+        <DisplayLabel Text={killsBind.map(val => `K: ${val}`)} LayoutOrder={1} />
+        <DisplayLabel Text={deathsBind.map(val => `D: ${val}`)} LayoutOrder={2} />
+        <DisplayLabel Text={pingBind.map(val => `P: ${val}`)} LayoutOrder={3} />
       </frame>
 
       <imagelabel // User flag
         Image={flagBind}
         ScaleType={"Fit"}
-        AnchorPoint={new Vector2(0.5, 0.5)}
+        AnchorPoint={new Vector2(0.5, 1)}
         BackgroundTransparency={1}
-        Position={UDim2.fromScale(0.9, 0.9)}
-        Rotation={10}
+        Position={new UDim2(0.5, 0, 1, -10)}
         Size={UDim2.fromOffset(40, 40)}
         ZIndex={2}
       />
-
-      <imagelabel // Caret
-        Image={"rbxasset://textures/ui/InGameChat/Caret.png"}
-        ImageColor3={accentColor}
-        ImageTransparency={0.5}
-        AnchorPoint={new Vector2(0.5, 1)}
-        BackgroundTransparency={1}
-        LayoutOrder={2}
-        Position={UDim2.fromScale(0.5, 0)}
-        Rotation={180}
-        Size={UDim2.fromOffset(18, 18)}
-      >
-        <uiaspectratioconstraint
-          AspectRatio={1.33}
-        />
-      </imagelabel>
     </frame>
   );
 }
 
+function SmallHealthBar(props: { entityId: React.Binding<EntityId>, visibileModifier: React.Binding<boolean> }) {
+  const [sizeBinding, SetSize] = React.createBinding(0);
+
+  const connection = defaultEnvironments.lifecycle.BindTickrate(() => {
+    const entity = defaultEnvironments.entity.entities.get(props.entityId.getValue());
+    if (!entity?.IsA("PlayerEntity")) {
+      SetSize(0);
+      return;
+    }
+
+    SetSize(math.clamp(entity.health / entity.maxHealth, 0, 1));
+  });
+
+  React.useEffect(() => {
+    return () => {
+      connection();
+    };
+  });
+
+  return <frame
+    BackgroundColor3={new Color3(0.125, 0.125, 0.125)}
+    BorderSizePixel={0}
+    AnchorPoint={new Vector2(0.5, 0)}
+    Position={new UDim2(0.5, 0, 1, 5)}
+    Size={new UDim2(0, ENTRY_SIZE.X.Offset * 0.75, 0, 5)}
+    Visible={sizeBinding.map(val => val > 0 && !props.visibileModifier.getValue())}
+    ZIndex={-1}
+  >
+    <frame
+      BackgroundColor3={sizeBinding.map(val => new Color3(1, 0, 0).Lerp(new Color3(0, 1, 0), val))}
+      BorderSizePixel={0}
+      Size={sizeBinding.map(val => new UDim2(val, 0, 1, 0))}
+    />
+    <uipadding
+      PaddingTop={new UDim(0, 1)}
+      PaddingBottom={new UDim(0, 1)}
+      PaddingLeft={new UDim(0, 1)}
+      PaddingRight={new UDim(0, 1)}
+    />
+  </frame>;
+}
+
 function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOrder: React.Binding<number> }) {
-  const [statsText, SetStatsText] = React.createBinding("0 / 0");
   const [userImage, SetUserImage] = React.createBinding(formatUserImageLabel(1));
   const [teamColorBinding, SetTeamColor] = React.createBinding(Color3.fromHex(colorTable.spectatorsColor));
 
@@ -183,7 +195,6 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
       SetUserDead(true);
       SetUserDisconnected(true);
       SetUserImage(DEFAULT_USER_IMAGE);
-      SetStatsText("");
       SetExpandedInfoVisible(false);
       SetTeamColor(Color3.fromHex(colorTable.spectatorsColor));
       return;
@@ -191,7 +202,6 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
 
     SetUserDisconnected(false);
     SetUserDead(entity.health <= 0);
-    SetStatsText(`${entity.stats.kills} / ${entity.stats.deaths}`);
     SetExpandedInfoVisible(mouseInFrame);
 
     {
@@ -214,7 +224,7 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
   return (
     <frame
       BackgroundTransparency={1}
-      Size={UDim2.fromOffset(50, 50)}
+      Size={ENTRY_SIZE}
       LayoutOrder={props.layoutOrder}
       Event={{
         MouseEnter: () => mouseInFrame = true,
@@ -251,7 +261,7 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
         <imagelabel // Rounded user image
           Image={userImage}
           BackgroundTransparency={1}
-          Size={UDim2.fromOffset(50, 50)}
+          Size={ENTRY_SIZE}
           ZIndex={2}
         >
           <uicorner
@@ -262,34 +272,18 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
         <frame // Half-top user image
           BackgroundTransparency={1}
           ClipsDescendants={true}
-          Size={UDim2.fromOffset(50, 25)}
+          Size={UDim2.fromOffset(ENTRY_SIZE.X.Offset, ENTRY_SIZE.Y.Offset * 0.5)}
           ZIndex={3}
         >
           <imagelabel
             Image={userImage}
             BackgroundTransparency={1}
-            Size={UDim2.fromOffset(50, 50)}
+            Size={ENTRY_SIZE}
           />
         </frame>
       </frame>
 
-      <textlabel // Stats text
-        FontFace={new Font(
-          "rbxasset://fonts/families/GothamSSm.json",
-          Enum.FontWeight.SemiBold,
-          Enum.FontStyle.Normal
-        )}
-        Text={statsText}
-        TextColor3={Color3.fromHex("#FFFFFF")}
-        TextSize={14}
-        TextTransparency={0.5}
-        TextTruncate={"AtEnd"}
-        AnchorPoint={new Vector2(0.5, 0)}
-        AutomaticSize={"Y"}
-        BackgroundTransparency={1}
-        Position={new UDim2(0.5, 0, 1, 5)}
-        Size={UDim2.fromScale(1, 0)}
-      />
+      <SmallHealthBar entityId={props.entityId} visibileModifier={expandedInfoVisible} />
 
       <frame // Dark overlay
         BackgroundTransparency={1}
