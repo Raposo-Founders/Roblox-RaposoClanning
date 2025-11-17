@@ -328,7 +328,9 @@ function TeamDisplayContent(props: { Team: PlayerTeam }) {
       Position={UDim2.fromOffset(0, 60)}
       Size={new UDim2(1, 0, 1, -60)}
       ref={contentReference}
-    />
+    >
+      <uilistlayout SortOrder={"LayoutOrder"} />
+    </scrollingframe>
   </frame>
 }
 
