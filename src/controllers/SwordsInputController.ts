@@ -1,7 +1,7 @@
 import { UserInputService, ContextActionService, RunService } from "@rbxts/services";
 import { defaultEnvironments } from "defaultinsts";
 import { getLocalPlayerEntity } from "./LocalEntityController";
-import { CameraSystem } from "systems/CameraSystem";
+import { IsCameraShiftlockEnabled, SetCameraShiftLockEnabled } from "./CameraController";
 
 // # Variables
 let swordsAutoAttack = false;
@@ -33,7 +33,7 @@ function swordsEquipToggle(state: Enum.UserInputState) {
 
 function setShiftLock(state: Enum.UserInputState) {
   if (state.Name !== "Begin") return;
-  CameraSystem.setShiftLock(!CameraSystem.isShiftlockEnabled());
+  SetCameraShiftLockEnabled(!IsCameraShiftlockEnabled());
 }
 
 function stylizeButton(actionName: string, anchorPoint: Vector2, position: UDim2, size: UDim2) {

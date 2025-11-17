@@ -12,7 +12,6 @@ import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
 import { HttpProvider } from "providers/HttpProvider";
 import SessionInstance from "providers/SessionProvider";
 import StartSystems from "systems";
-import { CameraSystem } from "systems/CameraSystem";
 import ChatSystem from "systems/ChatSystem";
 import { CommandLine } from "UI/cmdline";
 import { ConsoleCommandsLogs } from "UI/cmdline/logs";
@@ -69,7 +68,7 @@ function ExecuteGameModules() {
 
 function BindLifeCycle() {
   const updateFunction = (dt: number) => {
-    CameraSystem.updateCamera(dt);
+    UpdateCameraLoop(dt);
 
     earlyUpdateLifecycleInstances(dt);
     lateUpdateLifecycleInstances(dt);

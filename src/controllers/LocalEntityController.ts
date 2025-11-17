@@ -1,7 +1,7 @@
 import { Players, RunService } from "@rbxts/services";
 import { defaultEnvironments } from "defaultinsts";
 import { DoesInstanceExist } from "util/utilfuncs";
-import { CameraSystem } from "../systems/CameraSystem";
+import { CAMERA_INST, IsCameraShiftlockEnabled, SetCameraTrackingObject } from "./CameraController";
 
 // # Constants & variables
 
@@ -25,18 +25,18 @@ if (RunService.IsClient())
     entity.humanoidModel.HumanoidRootPart.Anchored = entity.anchored || entity.health <= 0;
     if (entity.health <= 0) return;
 
-    CameraSystem.setTrackingEntity(entity.id);
+    SetCameraTrackingObject(entity.humanoidModel.FindFirstChild("Head"));
     Players.LocalPlayer.Character = entity.humanoidModel;
 
-    if (CameraSystem.isShiftlockEnabled()) {
+    if (IsCameraShiftlockEnabled()) {
       const currentPosition = entity.humanoidModel.HumanoidRootPart.CFrame;
       const [charX, , charZ] = currentPosition.ToOrientation();
-      const [, camRotY] = CameraSystem.getOrigin().ToOrientation();
+      const [, camRotY] = CAMERA_INST.CFrame.ToOrientation();
 
       entity.humanoidModel.HumanoidRootPart.CFrame = new CFrame(currentPosition.Position).mul(CFrame.Angles(charX, camRotY, charZ));
     }
 
-    entity.humanoidModel.Humanoid.AutoRotate = !CameraSystem.isShiftlockEnabled();
+    entity.humanoidModel.Humanoid.AutoRotate = !IsCameraShiftlockEnabled();
 
     entity.origin = entity.humanoidModel.GetPivot();
     entity.velocity = entity.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();

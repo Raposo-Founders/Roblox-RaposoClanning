@@ -3,10 +3,20 @@ import { defaultEnvironments } from "defaultinsts";
 import { RaposoConsole } from "logging";
 import { MapContent } from "providers/WorldProvider";
 import { generateTracelineParameters } from "util/traceparam";
-import { SoundSystem } from "./SoundSystem";
+import { SoundSystem } from "../systems/SoundSystem";
+import WorldEntity from "entities/WorldEntity";
+import { DoesInstanceExist } from "util/utilfuncs";
+import { t } from "@rbxts/t";
 
 // # Constants & variables
 const UserGameSettings = UserSettings().GetService("UserGameSettings");
+
+export const CAMERA_INST = new Instance("Camera");
+CAMERA_INST.Parent = workspace;
+CAMERA_INST.CameraType = Enum.CameraType.Scriptable;
+CAMERA_INST.Name = "Raposo";
+
+let trackingInstance: Instance | EntityId | undefined;
 
 // Camera rotation
 const PITCH_LIMIT = 89;
@@ -15,9 +25,7 @@ const ROTATION_SPEED_MOUSE = new Vector2(1, 0.77).mul(0.5); // (rad/s)
 const ROTATION_SPEED_TOUCH = new Vector2(1, 0.66).mul(math.rad(1)); // (rad/s)
 const ROTATION_SPEED_GAMEPAD = new Vector2(1, 0.77).mul(math.rad(4)); // (rad/s)
 
-let cameraRotation = new Vector2(0, 0);
-
-const CAMERA_INST = new Instance("Camera");
+let cameraRotation = new Vector2();
 
 // Camera zoom
 const ZOOM_TWEENTIME = 0.25;
@@ -30,90 +38,54 @@ let lastZoomDistanceChangedTime = 0;
 
 // Shift lock
 const SHIFTLOCK_OFFSET = new CFrame(1.75, 0, 0);
-let shiftlockEnabled = false;
+export let shiftlockEnabled = false;
 
-// Other
+// # Functions
+export function SetCameraTrackingObject(object: Instance | EntityId | undefined) {
+  trackingInstance = object;
+}
 
-// # Namespace
-export namespace CameraSystem {
-  let trackingEntityId: string | undefined;
+export function GetCameraInputDirection() {
+  const inversionFactor = new Vector2(1, UserGameSettings.GetCameraYInvertValue());
 
-  export function getInputDirection() {
-    const inversionFactor = new Vector2(1, UserGameSettings.GetCameraYInvertValue());
+  let delta = Vector2.zero;
 
-    let delta = Vector2.zero;
+  // Mouse delta
+  {
+    const rawMouseDelta = UserInputService.GetMouseDelta();
+    const mouseDeltaSens = UserInputService.MouseDeltaSensitivity || 1;
 
-    // Mouse delta
-    {
-      const rawMouseDelta = UserInputService.GetMouseDelta();
-      const mouseDeltaSens = UserInputService.MouseDeltaSensitivity || 1;
+    const scaledRawDelta = rawMouseDelta.mul(mouseDeltaSens);
+    const sensMultipliedDelta = new Vector2(scaledRawDelta.X * ROTATION_SPEED_MOUSE.X, scaledRawDelta.Y * ROTATION_SPEED_MOUSE.Y);
 
-      const scaledRawDelta = rawMouseDelta.mul(mouseDeltaSens);
-      const sensMultipliedDelta = new Vector2(scaledRawDelta.X * ROTATION_SPEED_MOUSE.X, scaledRawDelta.Y * ROTATION_SPEED_MOUSE.Y);
-
-      delta = delta.add(sensMultipliedDelta);
-    }
-
-    return delta.mul(inversionFactor);
+    delta = delta.add(sensMultipliedDelta);
   }
 
-  export function setTrackingEntity(entityId: string) {
-    trackingEntityId = undefined;
+  return delta.mul(inversionFactor);
+}
 
-    const entity = defaultEnvironments.entity.entities.get(entityId);
-    if (!entity) {
-      RaposoConsole.Warn(`Invalid entity id: ${entityId}`);
-      return;
-    }
+export function SetCameraDistance(distance: number) {
+  lastZoomDistance = currZoomDistance;
+  targetZoomDistance = math.clamp(distance, ZOOM_MINDIST, ZOOM_MAXDIST);
+  lastZoomDistanceChangedTime = time();
+}
 
-    if (!entity.IsA("WorldEntity")) {
-      RaposoConsole.Warn(`Entity ${entityId} (${entity.classname}) is not an WorldEntity.`);
-      return;
-    }
+export function SetCameraShiftLockEnabled(enabled: boolean) {
+  shiftlockEnabled = enabled;
+}
 
-    trackingEntityId = entityId;
-  }
+export function IsCameraShiftlockEnabled() {
+  return shiftlockEnabled;
+}
 
-  export function getTrackingEntity() {
-    const entity = defaultEnvironments.entity.entities.get(trackingEntityId ?? "");
-    if (!entity?.IsA("WorldEntity")) return;
-
-    return entity;
-  }
-
-  export function setDistance(distance: number) {
-    lastZoomDistance = currZoomDistance;
-    targetZoomDistance = math.clamp(distance, ZOOM_MINDIST, ZOOM_MAXDIST);
-    lastZoomDistanceChangedTime = time();
-  }
-
-  export function setRotation(rotation: Vector2) {
-    cameraRotation = rotation;
-  }
-
-  export function setShiftLock(enabled: boolean) {
-    shiftlockEnabled = enabled;
-  }
-
-  export function isShiftlockEnabled() {
-    return shiftlockEnabled;
-  }
-
-  export function getOrigin() {
-    return CAMERA_INST.CFrame;
-  }
-
-  export function updateCamera(dt: number) {
-    CAMERA_INST.CameraType = UserInputService.TouchEnabled ? Enum.CameraType.Custom : Enum.CameraType.Scriptable;
-
-    updateMouseLock();
-    updateCameraZoom();
-    UpdateCamera(dt); 
-  }
+export function UpdateCameraLoop(dt: number) {
+  UpdateMouseLock();
+  UpdateCameraZoom();
+  MainUpdateCamera(dt); 
 }
 
 // # Functions
-function updateMouseLock() {
+function UpdateMouseLock() {
   const mouseButtonDown = UserInputService.IsMouseButtonPressed("MouseButton2");
 
   const inputMovingCamera = mouseButtonDown;
@@ -125,7 +97,7 @@ function updateMouseLock() {
     UserInputService.MouseBehavior = Enum.MouseBehavior.Default;
 }
 
-function updateCameraZoom() {
+function UpdateCameraZoom() {
   const passedTime = time() - lastZoomDistanceChangedTime;
   const alpha = math.clamp(passedTime / ZOOM_TWEENTIME, 0, 1);
 
@@ -134,18 +106,24 @@ function updateCameraZoom() {
   currZoomDistance = lerp;
 }
 
-function UpdateCamera(dt: number) {
-  if (CAMERA_INST.CameraType.Name !== "Scriptable")
+function MainUpdateCamera(dt: number) {
+  if (!DoesInstanceExist(CAMERA_INST) || CAMERA_INST.CameraType.Name !== "Scriptable" || workspace.CurrentCamera !== CAMERA_INST)
     return;
 
-  const entity = CameraSystem.getTrackingEntity();
-  if (!entity) return;
-
-  const inputDirection = CameraSystem.getInputDirection();
+  const inputDirection = GetCameraInputDirection();
+  let trackingEntity: WorldEntity | undefined;
   let focusPoint = new Vector3();
 
-  if (entity.IsA("PlayerEntity") && entity.humanoidModel) {
-    focusPoint = entity.humanoidModel.GetPivot().add(new Vector3(0, 1.5, 0)).Position;
+  if (t.string(trackingInstance)) {
+    const targetEntity = defaultEnvironments.entity.entities.get(trackingInstance);
+
+    if (targetEntity?.IsA("WorldEntity")) trackingEntity = targetEntity;
+    if (trackingEntity?.IsA("PlayerEntity") && DoesInstanceExist(trackingEntity.humanoidModel))
+      focusPoint = trackingEntity.humanoidModel.GetPivot().add(new Vector3(0, 1.5, 0)).Position;
+  }
+
+  if (t.instanceIsA("BasePart")(trackingInstance)) {
+    focusPoint = trackingInstance.CFrame.Position;
   }
 
   // Camera rotation input
@@ -185,15 +163,16 @@ function UpdateCamera(dt: number) {
 if (RunService.IsClient())
   UserInputService.InputChanged.Connect((input, busy) => {
     if (input.UserInputType === Enum.UserInputType.MouseWheel)
-      CameraSystem.setDistance(targetZoomDistance + (5 * -input.Position.Z));
+      SetCameraDistance(targetZoomDistance + (5 * -input.Position.Z));
+  });
+
+if (RunService.IsClient())
+  UserInputService.InputBegan.Connect(() => {
+    CAMERA_INST.CameraType = UserInputService.TouchEnabled ? Enum.CameraType.Custom : Enum.CameraType.Scriptable;
   });
 
 // # Logic
 if (RunService.IsClient()) {
-  CAMERA_INST.Name = "PlayerCamera";
-  CAMERA_INST.CameraType = Enum.CameraType.Scriptable;
-  CAMERA_INST.Parent = workspace;
-
   SoundSystem.CreateSoundGroup("Default");
   SoundSystem.AddListenerToWorldObject(CAMERA_INST, "Default");
 
