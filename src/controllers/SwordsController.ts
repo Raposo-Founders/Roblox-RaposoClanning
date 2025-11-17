@@ -157,6 +157,8 @@ if (RunService.IsClient())
   defaultEnvironments.entity.entityCreated.Connect(ent => {
     if (!ent.IsA("SwordPlayerEntity")) return;
 
+    const lastEntitiesHitTime = new Map<string, number>();
+
     const playermodel = createPlayermodelForEntity(ent);
 
     const getGripPosition = () => {
@@ -164,7 +166,7 @@ if (RunService.IsClient())
 
       if (ent.currentState === SwordState.Lunge)
         gripPosition = new CFrame(-1.5, 0, -1.5).mul(CFrame.Angles(0, -math.rad(90), 0));
-      
+
       return gripPosition;
     };
 
@@ -204,6 +206,11 @@ if (RunService.IsClient())
 
       for (const entity of relatedEntities) {
         if (!entity.IsA("HealthEntity") || entity.id === ent.id) continue;
+
+        const lastHitTime = lastEntitiesHitTime.get(entity.id) ?? 0;
+        if (time() - lastHitTime < 0.06) continue;
+        lastEntitiesHitTime.set(entity.id, time());
+
         ClientHandleHitboxTouched(ent, entity, other, defaultEnvironments.network);
       }
     });
