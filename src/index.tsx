@@ -1,6 +1,7 @@
 import React from "@rbxts/react";
 import { Players, ReplicatedStorage, RunService, StarterGui } from "@rbxts/services";
 import StartControllers from "controllers";
+import { UpdateCameraLoop } from "controllers/CameraController";
 import { defaultEnvironments } from "defaultinsts";
 import { requireEntities } from "entities";
 import { modulesFolder, uiFolder } from "folders";
@@ -135,16 +136,17 @@ if (RunService.IsClient()) {
 if (RunService.IsServer()) {
   print("Starting.");
 
-  const url = "http://ip-api.com/json/";
-  const info = HttpProvider.Get(url) as {
-    countryCode: string,
-    region: string,
-    timezone: string,
-    status: string,
-  };
+  // const url = "http://ip-api.com/json/";
+  // const info = HttpProvider.Get(url) as {
+  //   countryCode: string,
+  //   region: string,
+  //   timezone: string,
+  //   status: string,
+  // };
 
-  if (info.status === "success")
-    ReplicatedStorage.SetAttribute("ServerLocation", `${info.countryCode}-${info.region}`);
+  // if (info.status === "success")
+  //   ReplicatedStorage.SetAttribute("ServerLocation", `${info.countryCode}-${info.region}`);
+  ReplicatedStorage.SetAttribute("ServerLocation", "NIL-NIL");
 
   defaultEnvironments.lifecycle.running = true;
   defaultEnvironments.entity.isServer = true;
