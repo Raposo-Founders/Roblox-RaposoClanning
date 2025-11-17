@@ -1,7 +1,7 @@
 import { Players, RunService } from "@rbxts/services";
 import { defaultEnvironments } from "defaultinsts";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
-import { SwordPlayerEntity } from "entities/SwordPlayerEntity";
+import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";
 import SessionInstance from "providers/SessionProvider";
@@ -9,14 +9,23 @@ import { BufferReader } from "util/bufferreader";
 import { startBufferCreation } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
 
+// # Types
+interface BotAdvanceSuggestionResult {
+  ShouldJump: boolean;
+  ShouldMoveTowards: boolean;
+}
+
 // # Constants & variables
-const THRESHOLD_DISTANCE = 5;
-const SWORD_LENGTH = 4;
+const THRESHOLD_DISTANCE = 4;
+const SWORD_LENGTH = 3.9;
 const NETWORK_REPL_ID = "botsword_";
+
+const REACTION_TIME = 0.2;
 
 // # Functions
 function SearchTargetEntity(environment: T_EntityEnvironment, caller: PlayerEntity) {
   let currentTarget: WorldEntity | undefined;
+  let currentObjectivePoint: Vector3 | undefined;
 
   if (caller.team === PlayerTeam.Spectators) return;
 
@@ -38,56 +47,178 @@ function SearchTargetEntity(environment: T_EntityEnvironment, caller: PlayerEnti
     currentTarget = ent;
   }
 
-  if (!currentTarget)
-    for (const ent of environment.getEntitiesThatIsA("CapturePointEntity")) {
-      if (ent.current_team === caller.team) continue;
+  for (const ent of environment.getEntitiesThatIsA("CapturePointEntity")) {
+    if (ent.current_team === caller.team) continue;
 
-      currentTarget = ent;
-      break;
-    }
+    currentTarget = ent;
+    break;
+  }
 
   return currentTarget;
 }
 
-function CalculateBotMovement(entity: PlayerEntity, target: WorldEntity) {
+function CalculateDistanceFromLatency(baseThreshold: number, latency: number) {
+  latency *= 0.01;
+  latency *= 0.75;
+
+  return baseThreshold + latency;
+}
+
+function ShouldAdvance(entity: SwordPlayerEntity, target: PlayerEntity) {
+  const finalResult = {
+    jump: false,
+    advance: true,
+  };
+
+  if (!DoesInstanceExist(entity.humanoidModel)) return finalResult;
+  if (!DoesInstanceExist(target.humanoidModel)) return finalResult;
+  if (!target.IsA("SwordPlayerEntity")) return finalResult;
+
+  const currentPosition = entity.humanoidModel.GetPivot().Position.mul(new Vector3(1, 0, 1));
+  const targetPosition = target.origin.Position.mul(new Vector3(1, 0, 1));
+  const direction = new CFrame(currentPosition, targetPosition).LookVector;
+  const inverseDirection = new CFrame(targetPosition, currentPosition).LookVector;
+  const distance = currentPosition.sub(targetPosition).Magnitude;
+
+  const movingTowardsUs = IsPlayerMovingTo(target, inverseDirection);
+  const facingTowardsUs = IsEntityFacingTo(target, currentPosition);
+  const belowLatencyThreshold = distance <= CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.stats.ping);
+
+  const possibleBait = movingTowardsUs && !facingTowardsUs;
+  const healthAdvantage = math.abs(entity.health - target.health) >= SwordState.Lunge && entity.health > target.health;
+
+  if (belowLatencyThreshold && target.currentState !== SwordState.Idle) {
+    const swordPosition = target.humanoidModel.HumanoidRootPart.CFrame
+      .mul(new CFrame(1.5, 0, -SWORD_LENGTH * 0.5))
+      .Position.mul(new Vector3(1, 0, 1));
+    
+    const swordDistance = swordPosition.sub(currentPosition).Magnitude;
+    
+    // Check if we're too close to the target's sword
+    if (swordDistance <= THRESHOLD_DISTANCE) {
+      finalResult.jump = true;
+      finalResult.advance = false;
+      return finalResult;
+    }
+
+    if (facingTowardsUs && movingTowardsUs && !healthAdvantage) {
+      finalResult.advance = false;
+      return finalResult;
+    }
+  }
+
+  // Check if we have the health advantage
+  if (healthAdvantage && !possibleBait) {
+    finalResult.advance = true;
+    finalResult.jump = !target.grounded; // Jump bot?
+
+    return finalResult;
+  }
+
+  if (possibleBait) { // This could be a bait from the other player... This logic is too shitty
+    finalResult.advance = false;
+    finalResult.jump = false;
+
+    return finalResult;
+  }
+
+  return finalResult;
+}
+
+function CalculateMovement(entity: SwordPlayerEntity, target: WorldEntity) {
   if (!DoesInstanceExist(entity.humanoidModel)) return;
 
   const currentPosition = entity.humanoidModel.GetPivot().Position.mul(new Vector3(1, 0, 1));
   const targetPosition = target.origin.Position.mul(new Vector3(1, 0, 1));
+  const direction = new CFrame(currentPosition, targetPosition).LookVector;
+  const inverseDirection = new CFrame(targetPosition, currentPosition).LookVector;
   const distance = currentPosition.sub(targetPosition).Magnitude;
 
-  let moveToPosition = targetPosition;
+  const localLowHealth = entity.health < entity.maxHealth * 0.5;
+  const targetLowHealth = entity.IsA("HealthEntity") ? entity.health < entity.maxHealth * 0.5 : false;
 
-  if (target.IsA("PlayerEntity") && distance <= THRESHOLD_DISTANCE) {
-    const inverseDirection = new CFrame(targetPosition, currentPosition);
+  let moveDirection = direction;
+  let willJump = false;
 
-    moveToPosition = inverseDirection.mul(new CFrame(0, 0, -THRESHOLD_DISTANCE)).Position;
+  if (target.IsA("PlayerEntity")) {
+    const latencyThresholdDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.stats.ping);
+
+    const movingTowardsUs = IsPlayerMovingTo(target, inverseDirection);
+    const facingTowardsUs = IsEntityFacingTo(target, currentPosition);
+    const advanceSuggestion = ShouldAdvance(entity, target);
+
+    if (distance < latencyThresholdDistance) {
+      willJump = advanceSuggestion.jump;
+      moveDirection = advanceSuggestion.advance ? direction : inverseDirection;
+    }
+
+    // Try to get the advantage side if we're in the air
+    // In this case, the right side of the entity, closest to their sword
+    // But if we're in the air, then we absolutely have the disadvantage
+    if (!entity.grounded) {
+
+      if (target.grounded) {
+        const rotation = new CFrame(currentPosition, targetPosition).Rotation;
+        const rightSideDirection = new CFrame(targetPosition).mul(rotation).mul(new CFrame(5, 0, 0)).LookVector;
+        const extremeRightSideDirection = new CFrame(targetPosition).mul(rotation).mul(new CFrame(10, 0, 0)).LookVector;
+
+        moveDirection = rightSideDirection;
+
+        if (facingTowardsUs) {
+          moveDirection = extremeRightSideDirection;
+        }
+      }
+    }
   }
 
-  entity.humanoidModel.Humanoid.MoveTo(moveToPosition);
+  if (distance < SWORD_LENGTH && entity.grounded)
+    moveDirection = inverseDirection;
+
+  if (entity.grounded && willJump)
+    entity.humanoidModel.Humanoid.Jump = true;
+  entity.humanoidModel.Humanoid.Move(moveDirection);
 }
 
-function CalculateLookVector(entity: PlayerEntity, target: PlayerEntity) {
+function CalculateLookDirection(entity: PlayerEntity, target?: WorldEntity) {
   if (!DoesInstanceExist(entity.humanoidModel)) return;
 
-  const currentPosition = entity.humanoidModel.HumanoidRootPart.GetPivot().Position;
-  const targetPosition = target.origin.Position;
-
-  const currentHorizontalPosition = currentPosition.mul(new Vector3(1, 0, 1));
-  const targetHorizontalPosition = targetPosition.mul(new Vector3(1, 0, 1));
-  const direction = new CFrame(currentHorizontalPosition, targetHorizontalPosition);
-  const distance = currentHorizontalPosition.sub(targetHorizontalPosition).Magnitude;
-
-  const swayX = 22.5 + (math.cos(time() * 40) * 30);
-
-  if (distance > THRESHOLD_DISTANCE + 3) {
+  if (!target) {
     entity.humanoidModel.Humanoid.AutoRotate = true;
     return;
   }
 
-  const [, currentYRotation] = direction.ToOrientation();
+  const position = entity.humanoidModel.HumanoidRootPart.CFrame.Position;
+  const targetPosition = target.origin.Position;
 
-  entity.humanoidModel.HumanoidRootPart.CFrame = new CFrame(currentPosition).mul(CFrame.Angles(0, currentYRotation + math.rad(swayX), 0));
+  const [, dirY] = new CFrame(position, target.origin.Position).ToOrientation();
+  const [rotX, rotY, rotZ] = entity.humanoidModel.HumanoidRootPart.CFrame.ToOrientation();
+  let finalRotation = math.lerp(rotY, dirY, 0.1);
+
+  const distance = position.sub(targetPosition).Magnitude;
+  const latencyDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.IsA("PlayerEntity") ? target.stats.ping : 0);
+
+  // The... wiggle...
+  if (target.IsA("PlayerEntity") && distance <= latencyDistance)
+    finalRotation = dirY + math.rad(22.5 + (math.cos(time() * 40) * 30));
+
+  entity.humanoidModel.HumanoidRootPart.CFrame = new CFrame(position).mul(CFrame.Angles(rotX, finalRotation, rotZ));
+}
+
+function IsEntityFacingTo(entity: WorldEntity, position: Vector3) {
+  const pointDirection = new CFrame(entity.origin.Position.mul(new Vector3(1, 0, 1)), position.mul(new Vector3(1, 0, 1))).LookVector;
+  const facingDirection = entity.origin.LookVector.mul(new Vector3(1, 0, 1));
+  const dot = facingDirection.Dot(pointDirection);
+
+  return dot >= 0.5;
+}
+
+function IsPlayerMovingTo(entity: WorldEntity, direction: Vector3) {
+  let movingDirection = entity.velocity;
+
+  if (entity.IsA("PlayerEntity") && entity.humanoidModel && DoesInstanceExist(entity.humanoidModel))
+    movingDirection = entity.humanoidModel.Humanoid.MoveDirection;
+
+  return movingDirection.Dot(direction) >= 0.6;
 }
 
 // # Execution
@@ -123,11 +254,10 @@ if (RunService.IsClient())
       const target = SearchTargetEntity(defaultEnvironments.entity, ent);
 
       if (target) {
-        CalculateBotMovement(ent, target);
-
-        if (target.IsA("PlayerEntity"))
-          CalculateLookVector(ent, target);
+        CalculateMovement(ent, target);
       }
+
+      CalculateLookDirection(ent, target);
 
       ent.origin = ent.humanoidModel.GetPivot();
       ent.velocity = ent.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
