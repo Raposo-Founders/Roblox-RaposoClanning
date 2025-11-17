@@ -5,12 +5,12 @@ interface IBufferCreator {
 }
 
 interface IBufferEntryInfo {
-  type: BufferType;
+  type: BufferByteType;
   value: unknown;
 }
 
 // # Constants
-enum BufferType {
+export enum BufferByteType {
   u8,
   i8,
   u16,
@@ -42,7 +42,7 @@ export function writeBufferU8(value: number) {
   assert(value >= 0 && value <= 255, "U8 number must be between 0 and 255.");
 
   bufferQueue.push({
-    type: BufferType.u8,
+    type: BufferByteType.u8,
     value: value,
   });
 }
@@ -55,7 +55,7 @@ export function writeBufferI8(bufferInfo: IBufferCreator, value: number) {
   assert(value >= -128 && value <= 127, "I8 number must be between -128 and 127.");
 
   bufferQueue.push({
-    type: BufferType.i8,
+    type: BufferByteType.i8,
     value: value,
   });
 
@@ -70,7 +70,7 @@ export function writeBufferU16(value: number) {
   assert(value >= 0 && value <= 65_535, "U16 number must be between 0 and 65535.");
 
   bufferQueue.push({
-    type: BufferType.u16,
+    type: BufferByteType.u16,
     value: value,
   });
 }
@@ -83,7 +83,7 @@ export function writeBufferI16(value: number) {
   assert(value >= -32_768 && value <= 32_767, "I16 number must be between -32768 and 32767.");
 
   bufferQueue.push({
-    type: BufferType.i16,
+    type: BufferByteType.i16,
     value: value,
   });
 }
@@ -96,7 +96,7 @@ export function writeBufferU32(value: number) {
   assert(value >= 0 && value <= 4_294_967_295, "U32 number must be between 0 and 4294967295.");
 
   bufferQueue.push({
-    type: BufferType.u32,
+    type: BufferByteType.u32,
     value: value,
   });
 }
@@ -109,7 +109,7 @@ export function writeBufferI32(value: number) {
   assert(value >= -2_147_483_648 && value <= 2_147_483_647, "I32 number must be between -2147483648 and 2147483647.");
 
   bufferQueue.push({
-    type: BufferType.i32,
+    type: BufferByteType.i32,
     value: value,
   });
 }
@@ -120,7 +120,7 @@ export function writeBufferF32(value: number) {
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.f32,
+    type: BufferByteType.f32,
     value: value,
   });
 }
@@ -131,7 +131,7 @@ export function writeBufferU64(value: number) {
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.u64,
+    type: BufferByteType.u64,
     value: value,
   });
 }
@@ -142,7 +142,7 @@ export function writeBufferF64(value: number) {
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.f64,
+    type: BufferByteType.f64,
     value: value,
   });
 }
@@ -153,7 +153,7 @@ export function writeBufferString(value: string) {
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.str,
+    type: BufferByteType.str,
     value: value,
   });
 }
@@ -164,7 +164,7 @@ export function writeBufferBool(value: boolean) {
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.bool,
+    type: BufferByteType.bool,
     value: value,
   });
 }
@@ -175,7 +175,7 @@ export function writeBufferVector(value1: number, value2: number, value3: number
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
-    type: BufferType.vec,
+    type: BufferByteType.vec,
     value: vector.create(value1, value2, value3),
   });
 }
@@ -190,42 +190,42 @@ export function finalizeBufferCreation() {
 
   for (const element of bufferQueue) {
     switch (element.type) {
-    case BufferType.u8:
+    case BufferByteType.u8:
       currentSize += 1;
       break;
-    case BufferType.i8:
+    case BufferByteType.i8:
       currentSize += 1;
       break;
-    case BufferType.u16:
+    case BufferByteType.u16:
       currentSize += 2;
       break;
-    case BufferType.i16:
+    case BufferByteType.i16:
       currentSize += 2;
       break;
-    case BufferType.u32:
+    case BufferByteType.u32:
       currentSize += 4;
       break;
-    case BufferType.i32:
+    case BufferByteType.i32:
       currentSize += 4;
       break;
-    case BufferType.f32:
+    case BufferByteType.f32:
       currentSize += 4;
       break;
-    case BufferType.u64:
+    case BufferByteType.u64:
       currentSize += 8;
       break;
-    case BufferType.f64:
+    case BufferByteType.f64:
       currentSize += 8;
       break;
-    case BufferType.str: {
+    case BufferByteType.str: {
       const stringSize = tostring(element.value).size();
       currentSize += stringSize + defaultStringSize;
       break;
     }
-    case BufferType.bool:
+    case BufferByteType.bool:
       currentSize += 1;
       break;
-    case BufferType.vec:
+    case BufferByteType.vec:
       currentSize += 4 * 3;
       break;
     }
@@ -235,35 +235,35 @@ export function finalizeBufferCreation() {
 
   for (const element of bufferQueue) {
     switch (element.type) {
-    case BufferType.u8:
+    case BufferByteType.u8:
       buffer.writeu8(bfr, currentOffset, element.value as number);
       currentOffset += 1;
       break;
-    case BufferType.i8:
+    case BufferByteType.i8:
       buffer.writei8(bfr, currentOffset, element.value as number);
       currentOffset += 1;
       break;
-    case BufferType.u16:
+    case BufferByteType.u16:
       buffer.writeu16(bfr, currentOffset, element.value as number);
       currentOffset += 2;
       break;
-    case BufferType.i16:
+    case BufferByteType.i16:
       buffer.writei16(bfr, currentOffset, element.value as number);
       currentOffset += 2;
       break;
-    case BufferType.u32:
+    case BufferByteType.u32:
       buffer.writeu32(bfr, currentOffset, element.value as number);
       currentOffset += 4;
       break;
-    case BufferType.i32:
+    case BufferByteType.i32:
       buffer.writei32(bfr, currentOffset, element.value as number);
       currentOffset += 4;
       break;
-    case BufferType.f32:
+    case BufferByteType.f32:
       buffer.writef32(bfr, currentOffset, element.value as number);
       currentOffset += 4;
       break;
-    case BufferType.u64: {
+    case BufferByteType.u64: {
       const low = (element.value as number % 2 ^ 32);
       const high = math.floor(element.value as number / 2 ^ 32);
 
@@ -272,11 +272,11 @@ export function finalizeBufferCreation() {
       currentOffset += 8;
       break;
     }
-    case BufferType.f64:
+    case BufferByteType.f64:
       buffer.writef64(bfr, currentOffset, element.value as number);
       currentOffset += 8;
       break;
-    case BufferType.str: {
+    case BufferByteType.str: {
       const stringValue = tostring(element.value);
       const stringSize = stringValue.size();
 
@@ -287,11 +287,11 @@ export function finalizeBufferCreation() {
       currentOffset += stringSize;
       break;
     }
-    case BufferType.bool:
+    case BufferByteType.bool:
       buffer.writeu8(bfr, currentOffset, element.value === true ? 255 : 0);
       currentOffset += 1;
       break;
-    case BufferType.vec: {
+    case BufferByteType.vec: {
       const x = (element.value as vector).x;
       const y = (element.value as vector).y;
       const z = (element.value as vector).z;
