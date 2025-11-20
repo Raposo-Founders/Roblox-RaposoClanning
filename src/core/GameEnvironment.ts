@@ -1,66 +1,75 @@
 import { Players } from "@rbxts/services";
+import { LifecycleInstance } from "lifecycle";
 import { RaposoConsole } from "logging";
 import { EntityManager } from "../entities";
 import { gameValues } from "../gamevalues";
-import { LifecycleInstance } from "../lifecycle";
 import { NetworkManager, sendDirectPacket } from "../network";
 import { startBufferCreation, writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
 import { RandomString } from "../util/utilfuncs";
 
-/* # Sessions #
-  Sessions is what we use for executing server code, which is also compatible with the client.
-  And yes, I do mean executing server code on the client...
-  One example is for when you want to make a local server on the client, to minimize the lag or something.
-*/
+// # Types
+type T_EnvironmentBinding = (env: GameEnvironment) => void;
+
+declare global {
+  type T_GameEnvironment = typeof GameEnvironment["prototype"];
+}
 
 // # Class
-class SessionInstance {
-  static instances = new Map<string, SessionInstance>();
-  static sessionCreated = new Signal<[inst: SessionInstance]>();
+class GameEnvironment {
+  static runningInstances = new Map<string, GameEnvironment>();
+  static boundCallbacks: T_EnvironmentBinding[] = [];
 
-  private readonly closingConnections = new Array<(environment: SessionInstance) => void>();
+  static BindCallbackToEnvironmentCreation = (callback: T_EnvironmentBinding) => this.boundCallbacks.push(callback);
+  static GetDefaultEnvironment = () => this.runningInstances.get("default")!;
+
+  private readonly closingConnections: T_EnvironmentBinding[] = [];
   private readonly connections: RBXScriptConnection[] = [];
-  private networkLifecycleDisconnect: Callback | undefined;
 
   readonly players = new Set<Player>();
   readonly playerJoined = new Signal<[user: Player, referenceId: string]>();
-  readonly playerLeft = new Signal<[Player, string]>();
+  readonly playerLeft = new Signal<[user: Player, reason: string]>();
 
   readonly blockedPlayers = new Map<Player["UserId"], string>; // UserId, reason
-  readonly attributes: Record<string, unknown> = {};
+  readonly attributes = {
+    totalTeamSize: 6,
+    raidingGroupId: 0,
+  };
 
-  constructor(
-    readonly id: string,
-    readonly network: NetworkManager,
-    readonly entity: EntityManager,
-    readonly lifecycle: LifecycleInstance,
-  ) {
-    RaposoConsole.Warn(`Creating session ${id}`);
+  readonly network = new NetworkManager();
+  readonly entity = new EntityManager(this);
+  readonly lifecycle = new LifecycleInstance();
 
-    SessionInstance.instances.set(id, this);
+  isPlayback = false;
 
-    this.networkLifecycleDisconnect = lifecycle.BindTickrate(() => network.processIncomingPackets());
+  constructor(readonly id: string, readonly isServer: boolean) {
+    RaposoConsole.Warn(`Creating game environment ${id}`);
+
+    GameEnvironment.runningInstances.set(id, this);
+
+    // Execute bindings
+    for (const callback of GameEnvironment.boundCallbacks)
+      task.spawn(callback, this);
+
     this.connections.push(Players.PlayerRemoving.Connect(user => this.RemovePlayer(user, "Left the game.")));
 
-    network.listenPacket("disconnect_request", (packet) => {
+    this.network.listenPacket("disconnect_request", (packet) => {
       if (!packet.sender) return;
       this.RemovePlayer(packet.sender, "Disconnected by user.");
     });
 
-    SessionInstance.sessionCreated.Fire(this);
+    this.lifecycle.running = true;
   }
 
   async Close() {
-    print(`Closing server instance ${this.id}...`);
+    print(`Closing game environment instance ${this.id}...`);
 
     this.lifecycle.Destroy();
-    SessionInstance.instances.delete(this.id);
+    GameEnvironment.runningInstances.delete(this.id);
 
     for (const user of this.players)
       this.RemovePlayer(user, "Instance closing.");
 
-    this.networkLifecycleDisconnect?.();
     this.network.Destroy();
 
     task.wait(1);
@@ -84,7 +93,7 @@ class SessionInstance {
     table.clear(this);
   }
 
-  BindToClose(callback: (server: SessionInstance) => void) {
+  BindToClose(callback: (server: GameEnvironment) => void) {
     this.closingConnections.push(callback);
   }
 
@@ -92,7 +101,7 @@ class SessionInstance {
     // const referenceId = HttpService.GenerateGUID(false);
     const referenceId = RandomString(10);
 
-    print(`${player.Name} (${referenceId}) has joined the server ${this.id}`);
+    RaposoConsole.Info(`${player.Name} (${referenceId}) has joined the server ${this.id}`);
 
     player.SetAttribute(gameValues.usersessionid, referenceId);
 
@@ -122,13 +131,13 @@ class SessionInstance {
   BlockPlayer(player: Player, reason = "undefined.") {
     this.blockedPlayers.set(player.UserId, reason);
 
-    this.RemovePlayer(player, `Banned by administrator: ${reason}`);
+    this.RemovePlayer(player, `Blocked by administrator: ${reason}`);
   }
 
   static GetServersFromPlayer(user: Player) {
-    const list = new Array<SessionInstance>();
+    const list = new Array<GameEnvironment>();
 
-    for (const [, server] of this.instances)
+    for (const [, server] of this.runningInstances)
       if (server.players.has(user)) list.push(server);
 
     return list;
@@ -136,4 +145,4 @@ class SessionInstance {
 }
 
 // * Export
-export = SessionInstance;
+export = GameEnvironment;

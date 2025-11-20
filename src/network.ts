@@ -60,12 +60,36 @@ export function listenDirectPacket(id: string, callback: (sender: Player | undef
 }
 
 // # Class
+export class PacketDistributor {
+  private strictIgnorePlayers = new Set<Player>();
+  
+  constructor() {
+    
+  }
+
+  StrictIgnore(user: Player) {
+    this.strictIgnorePlayers.add(user);
+  }
+
+  Generate() {
+    const selectedPlayers: Player[] = [];
+
+    for (const user of Players.GetPlayers()) {
+      if (this.strictIgnorePlayers.has(user)) continue;
+      selectedPlayers.push(user);
+    }
+
+    return {
+      players: selectedPlayers,
+    };
+  }
+}
+
 export class NetworkManager {
   private boundListeners = new Map<string, Callback[]>();
   private connections: RBXScriptConnection[] = [];
 
   remoteEnabled = true;
-  private incomingPackets = new Array<PacketInfo>();
   packetPosted = new Signal<[packet: PacketInfo]>();
 
   readonly signedUsers = new Set<Player>();
@@ -134,30 +158,18 @@ export class NetworkManager {
       print("User is not signed."); return; 
     }
 
-    this.incomingPackets.push(packet);
-  }
+    const callbackList = this.boundListeners.get(packet.id);
+    if (!callbackList || callbackList.size() <= 0) {
+      if (RunService.IsStudio())
+        RaposoConsole.Warn(`Unbound network callback: ${packet.id}`);
+      else
+        RaposoConsole.Warn(`Unknown network callback: "${packet.id}" sent from ${RunService.IsClient() ? "Server" : packet.sender?.UserId}`);
 
-  processIncomingPackets() {
-    const clonedIncomingPacketsList = Object.deepCopy(this.incomingPackets);
-
-    this.incomingPackets.clear();
-
-    for (const packet of clonedIncomingPacketsList) {
-      const callbackList = this.boundListeners.get(packet.id);
-      if (!callbackList || callbackList.size() <= 0) {
-        if (RunService.IsStudio())
-          RaposoConsole.Warn(`Unbound network callback: ${packet.id}`);
-        else
-          RaposoConsole.Warn(`Unknown network callback: "${packet.id}" sent from ${RunService.IsClient() ? "Server" : packet.sender?.UserId}`);
-
-        continue;
-      }
-
-      for (const callback of callbackList)
-        task.spawn(callback, packet);
+      return;
     }
 
-    clonedIncomingPacketsList.clear();
+    for (const callback of callbackList)
+      task.spawn(callback, packet);
   }
 
   sendPacket(id: string, players = Players.GetPlayers(), ignore: Player[] = [], unreliable = false) {
@@ -206,7 +218,6 @@ export class NetworkManager {
     this.connections.clear();
 
     this.boundListeners.clear();
-    this.incomingPackets.clear();
   }
 }
 

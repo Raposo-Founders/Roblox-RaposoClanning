@@ -1,12 +1,11 @@
 import { RunService, TweenService, UserInputService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
-import { RaposoConsole } from "logging";
+import { t } from "@rbxts/t";
+import WorldEntity from "entities/WorldEntity";
 import { MapContent } from "providers/WorldProvider";
 import { generateTracelineParameters } from "util/traceparam";
-import { SoundSystem } from "../systems/SoundSystem";
-import WorldEntity from "entities/WorldEntity";
 import { DoesInstanceExist } from "util/utilfuncs";
-import { t } from "@rbxts/t";
+import { SoundSystem } from "../systems/SoundSystem";
+import GameEnvironment from "core/GameEnvironment";
 
 // # Constants & variables
 const UserGameSettings = UserSettings().GetService("UserGameSettings");
@@ -78,10 +77,10 @@ export function IsCameraShiftlockEnabled() {
   return shiftlockEnabled;
 }
 
-export function UpdateCameraLoop(dt: number) {
+export function UpdateCameraLoop(dt: number, env: GameEnvironment) {
   UpdateMouseLock();
   UpdateCameraZoom();
-  MainUpdateCamera(dt); 
+  MainUpdateCamera(dt, env);
 }
 
 // # Functions
@@ -106,7 +105,7 @@ function UpdateCameraZoom() {
   currZoomDistance = lerp;
 }
 
-function MainUpdateCamera(dt: number) {
+function MainUpdateCamera(dt: number, env: GameEnvironment) {
   if (!DoesInstanceExist(CAMERA_INST) || CAMERA_INST.CameraType.Name !== "Scriptable" || workspace.CurrentCamera !== CAMERA_INST)
     return;
 
@@ -115,7 +114,7 @@ function MainUpdateCamera(dt: number) {
   let focusPoint = new Vector3();
 
   if (t.string(trackingInstance)) {
-    const targetEntity = defaultEnvironments.entity.entities.get(trackingInstance);
+    const targetEntity = env.entity.entities.get(trackingInstance);
 
     if (targetEntity?.IsA("WorldEntity")) trackingEntity = targetEntity;
     if (trackingEntity?.IsA("PlayerEntity") && DoesInstanceExist(trackingEntity.humanoidModel))
@@ -148,7 +147,7 @@ function MainUpdateCamera(dt: number) {
       focusPoint,
       1,
       direction,
-      generateTracelineParameters(false, [MapContent.Parts], [], defaultEnvironments.entity),
+      generateTracelineParameters(false, [MapContent.Parts], [], env.entity),
     );
 
     if (raycast)

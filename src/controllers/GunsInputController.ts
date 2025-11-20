@@ -1,13 +1,13 @@
 import { RunService, UserInputService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
 import { InputSystem } from "systems/InputSystem";
 import { getLocalPlayerEntity } from "./LocalEntityController";
+import GameEnvironment from "core/GameEnvironment";
 
 // # Variables
 
 // # Functions
 export function getLocalGunsEntity() {
-  const localEntity = getLocalPlayerEntity();
+  const localEntity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
   if (!localEntity?.IsA("GunPlayerEntity")) return;
   return localEntity;
 }
@@ -42,6 +42,10 @@ InputSystem.RegisterAction("tps_reload", () => {
 InputSystem.BindKeyToAction("MouseButton1", "tps_attack");
 
 if (RunService.IsClient())
-  defaultEnvironments.lifecycle.BindUpdate(() => {
-    updateMousePosition();
+  GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+    if (env.isServer) return;
+
+    env.lifecycle.BindUpdate(() => {
+      updateMousePosition();
+    });
   });

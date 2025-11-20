@@ -1,4 +1,6 @@
 import { BufferReader } from "util/bufferreader";
+import { BufferByteType } from "util/bufferwriter";
+import Signal from "util/signal";
 import { ErrorObject } from "util/utilfuncs";
 
 declare global {
@@ -7,9 +9,11 @@ declare global {
   }
 }
 
+type EntityVariableSpecialHandler<T> = (lastState: T | undefined) => void;
+
 abstract class BaseEntity {
   readonly id = ErrorObject<string>("Entity id cannot be accessed during contruction.");
-  readonly environment = ErrorObject<T_EntityEnvironment>("Entity session cannot be accessed during construction.");
+  readonly environment = ErrorObject<T_GameEnvironment>("Entity environment cannot be accessed during construction.");
 
   abstract readonly classname: keyof GameEntities;
   protected inheritanceList = new Set<keyof GameEntities>();
@@ -18,8 +22,15 @@ abstract class BaseEntity {
   readonly associatedInstances = new Set<Instance>();
   readonly attributesList = new Map<string, unknown>();
 
+  readonly onReplicationReceived = new Signal();
+  readonly networkableProperties = new Map<string, BufferByteType | EntityVariableSpecialHandler<never>>();
+
   constructor() {
     this.inheritanceList.add("BaseEntity");
+  }
+
+  RegisterNetworkableProperty<T extends keyof this>(variableName: T, byteType: BufferByteType | EntityVariableSpecialHandler<this[T]>) {
+    this.networkableProperties.set(variableName as string, byteType);
   }
 
   IsA<C extends keyof GameEntities>(classname: C): this is EntityType<C> {

@@ -1,5 +1,5 @@
 import React from "@rbxts/react";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import CapturePointEntity from "entities/CapturePointEntity";
 import { colorTable } from "UI/values";
 
@@ -12,8 +12,8 @@ export function CapturePointMeter(props: { entityId: string }) {
   let entity: CapturePointEntity | undefined;
   let disconnectCallback: Callback | undefined;
 
-  disconnectCallback = defaultEnvironments.lifecycle.BindTickrate((ctx) => {
-    if (entity && !defaultEnvironments.entity.isEntityOnMemoryOrImSchizo(entity)) {
+  disconnectCallback = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate((ctx) => {
+    if (entity && !GameEnvironment.GetDefaultEnvironment().entity.isEntityOnMemoryOrImSchizo(entity)) {
       entity = undefined;
       disconnectCallback?.();
       disconnectCallback = undefined;
@@ -21,7 +21,7 @@ export function CapturePointMeter(props: { entityId: string }) {
     }
 
     if (!entity) {
-      const searchEntity = defaultEnvironments.entity.entities.get(props.entityId);
+      const searchEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId);
       if (!searchEntity || !searchEntity.IsA("CapturePointEntity")) return;
 
       entity = searchEntity;

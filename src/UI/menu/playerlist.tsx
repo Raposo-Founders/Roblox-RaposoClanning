@@ -1,11 +1,11 @@
-import React from "@rbxts/react";
-import { BUTTON_STRIP_SIZE, HorizontalButtonsLine, HorizontalTabButton, ITEM_HOR_SPACING, ITEM_VER_SPACING, menuTabActivated } from "./menuprefabs";
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
-import { colorTable, uiValues } from "UI/values";
 import ColorUtils from "@rbxts/colour-utils";
-import countryFlags from "UI/countries";
-import { defaultEnvironments } from "defaultinsts";
+import React from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
+import GameEnvironment from "core/GameEnvironment";
+import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import countryFlags from "UI/countries";
+import { colorTable } from "UI/values";
+import { BUTTON_STRIP_SIZE, HorizontalButtonsLine, HorizontalTabButton, ITEM_HOR_SPACING, ITEM_VER_SPACING, menuTabActivated } from "./menuprefabs";
 
 // # Constants & variables
 const PLAYER_LISTING_SIZE = 30;
@@ -16,8 +16,8 @@ function PlayerEntry(props: { Entity: PlayerEntity }) {
   const [deathsBinding, SetDeathsAmount] = React.createBinding(0);
   const [pingBinding, SetPingAmount] = React.createBinding(0);
 
-  const connection = defaultEnvironments.lifecycle.BindTickrate(() => {
-    if (!defaultEnvironments.entity.isEntityOnMemoryOrImSchizo(props.Entity)) return;
+  const connection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
+    if (!GameEnvironment.GetDefaultEnvironment().entity.isEntityOnMemoryOrImSchizo(props.Entity)) return;
 
     SetKillsAmount(props.Entity.stats.kills);
     SetDeathsAmount(props.Entity.stats.deaths);
@@ -277,10 +277,10 @@ function TeamDisplayContent(props: { Team: PlayerTeam }) {
   if (props.Team === PlayerTeam.Defenders) targetColorHex = colorTable.defendersColor;
   if (props.Team === PlayerTeam.Raiders) targetColorHex = colorTable.raidersColor;
 
-  const updateEntitiesConnection = defaultEnvironments.lifecycle.BindTickrate(() => {
+  const updateEntitiesConnection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
     if (!contentReference.current) return;
 
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of GameEnvironment.GetDefaultEnvironment().entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.team !== props.Team) continue;
       if (mountedContent.has(ent.id)) continue;
 
@@ -291,7 +291,7 @@ function TeamDisplayContent(props: { Team: PlayerTeam }) {
 
     // Remove invalid entries
     for (const [entityId, root] of mountedContent) {
-      const targetEntity = defaultEnvironments.entity.entities.get(entityId);
+      const targetEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(entityId);
       if (targetEntity?.IsA("PlayerEntity") && targetEntity.team === props.Team) continue;
 
       root.unmount();

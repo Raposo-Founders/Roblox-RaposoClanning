@@ -1,11 +1,10 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import { getPlayersFromTeam } from "controllers/PlayerController";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import { GetCreatorGroupInfo } from "providers/GroupsProvider";
-import SessionInstance from "providers/SessionProvider";
 import ChatSystem from "systems/ChatSystem";
-import { getPlayersFromTeam } from "controllers/PlayerController";
 import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferString, writeBufferU8 } from "util/bufferwriter";
@@ -15,8 +14,10 @@ const CMD_INDEX_NAME = "cmd_team";
 
 // # Bindings & execution
 
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.network.listenPacket(CMD_INDEX_NAME, info => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.network.listenPacket(CMD_INDEX_NAME, info => {
     if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
 
     const reader = BufferReader(info.content);
@@ -24,14 +25,14 @@ SessionInstance.sessionCreated.Connect(inst => {
     const team = reader.u8();
 
     let callerEntity: PlayerEntity | undefined;
-    for (const ent of inst.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.GetUserFromController() !== info.sender) continue;
       callerEntity = ent;
       break;
     }
     if (!callerEntity) return;
 
-    const targetEntity = inst.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
       ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
       return;
@@ -52,7 +53,7 @@ SessionInstance.sessionCreated.Connect(inst => {
     }
 
     const creatorGroupInfo = GetCreatorGroupInfo();
-    const raidingGroupId = tonumber(inst.attributes.raidingGroupId);
+    const raidingGroupId = tonumber(env.attributes.raidingGroupId);
 
     if (targetController && creatorGroupInfo && raidingGroupId) {
       if (team === PlayerTeam.Defenders && !targetController.IsInGroup(creatorGroupInfo.groupInfo.Id)) {
@@ -73,8 +74,8 @@ SessionInstance.sessionCreated.Connect(inst => {
 
     // Check if the amount of players exceedes the team size
     {
-      const playersOnTeam = getPlayersFromTeam(inst.entity, team);
-      const totalDefinedSize = tonumber(inst.attributes.totalTeamSize) || 999;
+      const playersOnTeam = getPlayersFromTeam(env.entity, team);
+      const totalDefinedSize = tonumber(env.attributes.totalTeamSize) || 999;
 
       if (playersOnTeam.size() + 1 > totalDefinedSize) {
         ChatSystem.sendSystemMessage(`Unable to team player: Maximum amount of players on the team exceeds ${totalDefinedSize}.`);
@@ -109,6 +110,6 @@ new ConsoleFunctionCallback(["team"], [{ name: "player", type: "player" }, { nam
       startBufferCreation();
       writeBufferString(ent.id);
       writeBufferU8(PlayerTeam[team]);
-      defaultEnvironments.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.sendPacket(CMD_INDEX_NAME);
     }
   });

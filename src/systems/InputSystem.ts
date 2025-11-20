@@ -1,5 +1,6 @@
 import { RunService, UserInputService } from "@rbxts/services";
 import { ExecuteCommand } from "cmd";
+import GameEnvironment from "core/GameEnvironment";
 import { RaposoConsole } from "logging";
 
 // # Types
@@ -48,7 +49,7 @@ if (RunService.IsClient()) {
       actionInfo?.onActivate();
 
       if (!actionInfo)
-        ExecuteCommand(actionName);
+        ExecuteCommand(actionName,GameEnvironment.GetDefaultEnvironment());
     }
   });
 
@@ -65,7 +66,7 @@ if (RunService.IsClient()) {
       actionInfo?.onDeactivate?.();
 
       if (!actionInfo)
-        ExecuteCommand(actionName);
+        ExecuteCommand(actionName,GameEnvironment.GetDefaultEnvironment());
     }
   });
 }

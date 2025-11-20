@@ -1,10 +1,10 @@
 import { RunService, TextChatService } from "@rbxts/services";
 import { colorTable } from "UI/values";
+import GameEnvironment from "core/GameEnvironment";
+import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
-import ChatSystem from "systems/ChatSystem";
 import Signal from "util/signal";
 import { CFUNC_REPLY_POST, ConsoleFunctionCallback, createdCVars, cvarFlags } from "./cvar";
-import { gameValues } from "gamevalues";
 
 // # Constants & variables
 export const COMMAND_EXECUTED = new Signal<[name: string, args: string[]]>();
@@ -14,7 +14,13 @@ function FormatCommandString(text: string) {
   return text.gsub("^%s+", "")[0].gsub("%s+$", "")[0];
 }
 
-export async function ExecuteCommand(content: string) {
+export function InitializeCommands() {
+  for (const inst of script.WaitForChild("commands").GetChildren())
+    if (inst.IsA("ModuleScript"))
+      task.spawn(require, inst);
+}
+
+export async function ExecuteCommand(content: string, env: GameEnvironment) {
   assert(RunService.IsClient(), "Function can only be called from the client.");
 
   const args = FormatCommandString(content).split(" ");
@@ -61,7 +67,7 @@ export async function ExecuteCommand(content: string) {
   if (targetCallback) {
     COMMAND_EXECUTED.Fire(targetCallback.names[0], args);
  
-    const [success, errorMessage] = pcall(() => targetCallback.execute(args));
+    const [success, errorMessage] = pcall(() => targetCallback.execute(args, env));
     if (!success)
       RaposoConsole.Error(`Command error: <b><font color="${colorTable.errorneousColor}">${errorMessage}</font></b>`);
       // ChatSystem.sendSystemMessage(`Command error: <b><font color="${colorTable.errorneousColor}">${errorMessage}</font></b>`);
@@ -92,7 +98,7 @@ if (RunService.IsClient())
       for (const cmd of split) {
         if (cmd === "") continue;
     
-        ExecuteCommand(cmd).expect();
+        ExecuteCommand(cmd, GameEnvironment.runningInstances.get("default")!).expect();
         task.wait();
         task.wait(); // Double trouble :)
       }

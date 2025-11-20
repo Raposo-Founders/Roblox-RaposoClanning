@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "@rbxts/react";
 import { createRoot, Root } from "@rbxts/react-roblox";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { CapturePointMeter } from "./capturepointMeter";
 
 export function ObjectivesLine() {
@@ -9,7 +9,7 @@ export function ObjectivesLine() {
   useEffect(() => {
     const mountedRoots = new Map<string, Root>();
 
-    defaultEnvironments.entity.entityCreated.Connect(ent => {
+    GameEnvironment.GetDefaultEnvironment().entity.entityCreated.Connect(ent => {
       if (!parentRef.current) return;
 
       if (ent.IsA("CapturePointEntity")) {
@@ -20,7 +20,7 @@ export function ObjectivesLine() {
       }
     });
 
-    defaultEnvironments.entity.entityDeleting.Connect(ent => {
+    GameEnvironment.GetDefaultEnvironment().entity.entityDeleting.Connect(ent => {
       const root = mountedRoots.get(ent.id);
       if (!root) return;
 

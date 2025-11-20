@@ -1,13 +1,12 @@
 import ColorUtils from "@rbxts/colour-utils";
-import { RunService, TweenService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import { TweenService } from "@rbxts/services";
+import GameEnvironment from "core/GameEnvironment";
 import BaseEntity from "entities/BaseEntity";
 import { GunPlayerEntity } from "entities/GunPlayerEntity";
 import HealthEntity from "entities/HealthEntity";
 import { getPlayerEntityFromController, PlayerTeam } from "entities/PlayerEntity";
 import { gameValues, getInstanceDefinedValue } from "gamevalues";
 import { NetworkManager } from "network";
-import SessionInstance from "providers/SessionProvider";
 import { ObjectsFolder } from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
 
@@ -59,45 +58,46 @@ function ClientHandleHit(attacker: GunPlayerEntity, target: HealthEntity, part: 
 }
 
 // # Bindings & misc
-SessionInstance.sessionCreated.Connect(server => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   // Listening for damage
-  server.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
-    if (!packet.sender) return;
+  if (env.isServer)
+    env.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
+      if (!packet.sender) return;
   
-    const reader = BufferReader(packet.content);
-    const hitIndex = reader.u8();
-    const entityId = reader.string();
+      const reader = BufferReader(packet.content);
+      const hitIndex = reader.u8();
+      const entityId = reader.string();
   
-    const entity = getPlayerEntityFromController(server.entity, tostring(packet.sender.GetAttribute(gameValues.usersessionid)));
-    if (!entity || !entity.IsA("GunPlayerEntity")) return;
+      const entity = getPlayerEntityFromController(env.entity, tostring(packet.sender.GetAttribute(gameValues.usersessionid)));
+      if (!entity || !entity.IsA("GunPlayerEntity")) return;
   
-    const targetEntity = server.entity.entities.get(entityId);
-    if (!targetEntity?.IsA("HealthEntity")) return;
+      const targetEntity = env.entity.entities.get(entityId);
+      if (!targetEntity?.IsA("HealthEntity")) return;
   
-    if (!CheckPlayers(entity, targetEntity)) return;
-  });
+      if (!CheckPlayers(entity, targetEntity)) return;
+    });
+
+  if (!env.isServer)
+    env.entity.entityCreated.Connect(ent => {
+      if (!ent.IsA("GunPlayerEntity")) return;
+
+      let playermodel = ent.humanoidModel;
+      while (!playermodel) {
+        task.wait();
+
+        if (!env.entity.isEntityOnMemoryOrImSchizo(ent)) break;
+        playermodel = ent.humanoidModel;
+      }
+      if (!playermodel) return;
+
+      const unbindLifecycleUpdate1 = env.lifecycle.BindTickrate(() => {
+
+      });
+
+      ent.OnDelete(() => {
+        unbindLifecycleUpdate1();
+      });
+
+      print("Finished setting up", ent.classname, ent.id);
+    });
 });
-
-if (RunService.IsClient())
-  defaultEnvironments.entity.entityCreated.Connect(ent => {
-    if (!ent.IsA("GunPlayerEntity")) return;
-
-    let playermodel = ent.humanoidModel;
-    while (!playermodel) {
-      task.wait();
-
-      if (!defaultEnvironments.entity.isEntityOnMemoryOrImSchizo(ent)) break;
-      playermodel = ent.humanoidModel;
-    }
-    if (!playermodel) return;
-
-    const unbindLifecycleUpdate1 = defaultEnvironments.lifecycle.BindTickrate(() => {
-
-    });
-
-    ent.OnDelete(() => {
-      unbindLifecycleUpdate1();
-    });
-
-    print("Finished setting up", ent.classname, ent.id);
-  });

@@ -1,9 +1,9 @@
 import ColorUtils from "@rbxts/colour-utils";
 import { Players, RunService, TextChatService, UserInputService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
+
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { listenDirectPacket, sendDirectPacket } from "network";
-import SessionInstance from "providers/SessionProvider";
 import { RenderChatMessage } from "UI/chatui/chatwindow";
 import { colorTable, uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
@@ -81,7 +81,7 @@ if (RunService.IsServer()) {
     const receivingUser = Players.GetPlayerByUserId(source.UserId);
     if (!receivingUser) return false;
 
-    for (const server of SessionInstance.GetServersFromPlayer(senderUser)) {
+    for (const server of GameEnvironment.GetServersFromPlayer(senderUser)) {
       if (!server.players.has(receivingUser)) continue;
       return true;
     }
@@ -103,7 +103,7 @@ if (RunService.IsClient()) {
     const senderUser = Players.GetPlayerByUserId(message.TextSource?.UserId ?? 0);
     if (senderUser) {
       let entity: PlayerEntity | undefined;
-      for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+      for (const ent of GameEnvironment.GetDefaultEnvironment().entity.getEntitiesThatIsA("PlayerEntity")) {
         if (ent.GetUserFromController() !== senderUser) continue;
         entity = ent;
         break;

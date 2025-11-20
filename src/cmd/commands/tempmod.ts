@@ -1,8 +1,7 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
@@ -13,22 +12,24 @@ const CMD_INDEX_NAME = "cmd_tempmod";
 
 // # Bindings & execution
 
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.network.listenPacket(CMD_INDEX_NAME, info => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.network.listenPacket(CMD_INDEX_NAME, info => {
     if (!info.sender || !info.sender.GetAttribute(gameValues.adminattr)) return;
 
     const reader = BufferReader(info.content);
     const entityId = reader.string();
 
     let callerEntity: PlayerEntity | undefined;
-    for (const ent of inst.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.GetUserFromController() !== info.sender) continue;
       callerEntity = ent;
       break;
     }
     if (!callerEntity) return;
 
-    const targetEntity = inst.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
       ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
       return;
@@ -59,6 +60,6 @@ new ConsoleFunctionCallback(["tempmod"], [{ name: "player", type: "player" }])
     for (const ent of targetPlayers) {
       startBufferCreation();
       writeBufferString(ent.id);
-      defaultEnvironments.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.sendPacket(CMD_INDEX_NAME);
     }
   });

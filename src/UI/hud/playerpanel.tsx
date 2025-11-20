@@ -1,11 +1,11 @@
 import ColorUtils from "@rbxts/colour-utils";
 import React from "@rbxts/react";
 import { Players } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import { getLocalPlayerEntity } from "controllers/LocalEntityController";
+import GameEnvironment from "core/GameEnvironment";
 import { cacheFolder } from "folders";
 import { PlayermodelRig } from "providers/PlayermodelProvider/rig";
 import { uiValues } from "UI/values";
-import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 
 const defaultDescription = new Instance("HumanoidDescription");
 
@@ -43,10 +43,10 @@ export function HudPlayerPanel() {
 
     viewportReference.current.CurrentCamera = cameraReference.current;
 
-    defaultEnvironments.lifecycle.BindTickrate(() => {
-      let playerEntity = defaultEnvironments.entity.entities.get(currentEntity);
+    GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
+      let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(currentEntity);
       if (!playerEntity || !playerEntity.IsA("PlayerEntity")) {
-        playerEntity = getLocalPlayerEntity();
+        playerEntity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
         if (!playerEntity || !playerEntity.IsA("PlayerEntity")) return;
       }
 

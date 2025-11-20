@@ -1,10 +1,11 @@
 import React, { useEffect } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
-import { defaultEnvironments } from "defaultinsts";
+
 import { PlayerTeam } from "entities/PlayerEntity";
 import { getPlayersFromTeam } from "controllers/PlayerController";
 import countryFlags from "UI/countries";
 import { colorTable, uiValues } from "UI/values";
+import GameEnvironment from "core/GameEnvironment";
 
 // # Constants & variables
 const DEAD_ICON = "rbxassetid://16682879119";
@@ -27,8 +28,8 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
   const [flagBind, SetFlag] = React.createBinding("");
   const [accentColor, SetAccentColor] = React.createBinding(Color3.fromHex(colorTable.spectatorsColor));
 
-  const binding1 = defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = defaultEnvironments.entity.entities.get(props.entityId.getValue());
+  const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
     if (!entity?.IsA("PlayerEntity")) {
       SetUsername("");
       SetKills(0);
@@ -139,8 +140,8 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
 function SmallHealthBar(props: { entityId: React.Binding<EntityId>, visibileModifier: React.Binding<boolean> }) {
   const [sizeBinding, SetSize] = React.createBinding(0);
 
-  const connection = defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = defaultEnvironments.entity.entities.get(props.entityId.getValue());
+  const connection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
     if (!entity?.IsA("PlayerEntity")) {
       SetSize(0);
       return;
@@ -189,8 +190,8 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
 
   let mouseInFrame = false;
 
-  const binding1 = defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = defaultEnvironments.entity.entities.get(props.entityId.getValue());
+  const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
     if (!entity?.IsA("PlayerEntity")) {
       SetUserDead(true);
       SetUserDisconnected(true);
@@ -345,7 +346,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
         continue;
       }
 
-      const entitiesList = getPlayersFromTeam(defaultEnvironments.entity, PlayerTeam[props.team]);
+      const entitiesList = getPlayersFromTeam(GameEnvironment.GetDefaultEnvironment().entity, PlayerTeam[props.team]);
 
       entitiesList.sort((a, b) => {
         return a.stats.kills > b.stats.kills;
@@ -388,7 +389,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
         uiEntryInfo.setEntityId(targetPlayer.id);
         uiEntryInfo.setLayoutOrder(math.max(targetPlayer.stats.kills, 1) * (props.team === "Defenders" ? -1 : 1));
       }
-      defaultEnvironments.lifecycle.YieldForTicks(2);
+      GameEnvironment.GetDefaultEnvironment().lifecycle.YieldForTicks(2);
     }
   });
 

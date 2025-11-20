@@ -1,25 +1,27 @@
 import { Players, RunService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
 import { DoesInstanceExist } from "util/utilfuncs";
 import { CAMERA_INST, IsCameraShiftlockEnabled, SetCameraTrackingObject } from "./CameraController";
+import GameEnvironment from "core/GameEnvironment";
 
 // # Constants & variables
 
 // # Functions
-export function getLocalPlayerEntity() {
+export function getLocalPlayerEntity(env: GameEnvironment) {
   assert(RunService.IsClient(), "Function can only be called from the client.");
 
-  for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity"))
+  for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity"))
     if (ent.GetUserFromController() === Players.LocalPlayer)
       return ent;
 }
 
 // # Bindings & execution
-if (RunService.IsClient())
-  defaultEnvironments.lifecycle.BindUpdate(() => {
-    if (defaultEnvironments.entity.isPlayback) return;
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
 
-    const entity = getLocalPlayerEntity();
+  env.lifecycle.BindUpdate(() => {
+    if (env.isPlayback) return;
+
+    const entity = getLocalPlayerEntity(env);
     if (!entity || !DoesInstanceExist(entity.humanoidModel)) return;
 
     entity.humanoidModel.HumanoidRootPart.Anchored = entity.anchored || entity.health <= 0;
@@ -42,3 +44,4 @@ if (RunService.IsClient())
     entity.velocity = entity.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
     entity.grounded = entity.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
   });
+});

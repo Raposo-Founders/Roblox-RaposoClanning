@@ -4,9 +4,9 @@ import ReactRoblox from "@rbxts/react-roblox";
 import { Players, RunService } from "@rbxts/services";
 import { COMMAND_EXECUTED } from "cmd";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
+
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import { Window } from "UI/blocks/window";
 import { uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
@@ -89,36 +89,42 @@ COMMAND_EXECUTED.Connect((name, args) => {
   startBufferCreation();
   writeBufferString(name);
   writeBufferString(args.join(" "));
-  defaultEnvironments.network.sendPacket(COMMAND_NETWORK_ID);
+  GameEnvironment.GetDefaultEnvironment().network.sendPacket(COMMAND_NETWORK_ID);
 });
 
-if (RunService.IsClient())
-  defaultEnvironments.network.listenPacket(COMMAND_NETWORK_ID, info => {
-    const reader = BufferReader(info.content);
-    const executor = reader.u64();
-    const name = reader.string();
-    const args = reader.string();
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
 
-    registerCommandExecutionLog(name, args, Players.GetPlayerByUserId(executor));
-  });
-
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.network.listenPacket(COMMAND_NETWORK_ID, info => {
+  env.network.listenPacket(COMMAND_NETWORK_ID, info => {
     if (!info.sender) return;
 
     const reader = BufferReader(info.content);
     const name = reader.string();
     const args = reader.string();
 
-    for (const user of inst.players) {
+    for (const user of env.players) {
       if (user === info.sender) continue;
 
       startBufferCreation();
       writeBufferU64(info.sender.UserId);
       writeBufferString(name);
       writeBufferString(args);
-      inst.network.sendPacket(COMMAND_NETWORK_ID, [user]);
+      env.network.sendPacket(COMMAND_NETWORK_ID, [user]);
     }
+  });
+});
+
+// Client
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+
+  env.network.listenPacket(COMMAND_NETWORK_ID, info => {
+    const reader = BufferReader(info.content);
+    const executor = reader.u64();
+    const name = reader.string();
+    const args = reader.string();
+
+    registerCommandExecutionLog(name, args, Players.GetPlayerByUserId(executor));
   });
 });
 

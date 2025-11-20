@@ -1,7 +1,6 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import ChatSystem from "systems/ChatSystem";
 import { startBufferCreation, writeBufferString } from "util/bufferwriter";
 
@@ -10,8 +9,10 @@ const CMD_INDEX_NAME = "cmd_joke";
 
 // # Bindings & execution
 
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.network.listenPacket(CMD_INDEX_NAME, info => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.network.listenPacket(CMD_INDEX_NAME, info => {
     if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
 
     ChatSystem.sendSystemMessage(`Nice try ${info.sender.Name}, but this is not Kohl's admin.`);
@@ -22,5 +23,5 @@ new ConsoleFunctionCallback(["fly", "ff", "forcefield", "invisible", "invis", "g
   .setCallback((ctx) => {
     startBufferCreation();
     writeBufferString("joke");
-    defaultEnvironments.network.sendPacket(CMD_INDEX_NAME);
+    ctx.env.network.sendPacket(CMD_INDEX_NAME);
   });

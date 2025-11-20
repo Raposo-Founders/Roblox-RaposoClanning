@@ -1,8 +1,9 @@
 import React from "@rbxts/react";
 import { Players, ReplicatedStorage, RunService, StarterGui } from "@rbxts/services";
+import { InitializeCommands } from "cmd";
 import StartControllers from "controllers";
 import { UpdateCameraLoop } from "controllers/CameraController";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { requireEntities } from "entities";
 import { modulesFolder, uiFolder } from "folders";
 import { gameValues } from "gamevalues";
@@ -10,8 +11,6 @@ import { earlyUpdateLifecycleInstances, lateUpdateLifecycleInstances } from "lif
 import { RaposoConsole } from "logging";
 import { listenDirectPacket } from "network";
 import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
-import { HttpProvider } from "providers/HttpProvider";
-import SessionInstance from "providers/SessionProvider";
 import StartSystems from "systems";
 import ChatSystem from "systems/ChatSystem";
 import { CommandLine } from "UI/cmdline";
@@ -27,6 +26,7 @@ import { DisplayLoadingScreen, HideLoadingScreen } from "UI/loadscreen";
 import { Menu } from "UI/menu";
 import { defaultRoot, uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
+import { getInstanceFromPath } from "util/instancepath";
 
 
 // # Constants & variables
@@ -69,7 +69,7 @@ function ExecuteGameModules() {
 
 function BindLifeCycle() {
   const updateFunction = (dt: number) => {
-    UpdateCameraLoop(dt);
+    UpdateCameraLoop(dt, GameEnvironment.GetDefaultEnvironment());
 
     earlyUpdateLifecycleInstances(dt);
     lateUpdateLifecycleInstances(dt);
@@ -109,9 +109,8 @@ _G.Raposo = {
   Controllers: {},
   Environment: {
     Folders: import("folders").expect(),
-    Sessions: import("providers/SessionProvider").expect(),
+    Sessions: import("core/GameEnvironment").expect(),
     Network: import("network").expect(),
-    defaultEnvironments,
     util: {
       BufferReader: BufferReader,
       BufferWriter: import("util/bufferwriter").expect(),
@@ -123,15 +122,20 @@ StartControllers(_G.Raposo.Controllers);
 ExecuteGameModules();
 
 // Misc & other shit
-if (RunService.IsClient()) {
-  defaultEnvironments.lifecycle.BindTickrate((_, dt) => {
-    defaultEnvironments.network.processIncomingPackets();
+InitializeCommands();
 
-    for (const [, entity] of defaultEnvironments.entity.entities)
-      task.spawn(() => entity.Think(dt));
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  env.lifecycle.BindTickrate((_, dt) => {
+    for (const [, ent] of env.entity.entities) {
+      const [success, message] = pcall(() => ent.Think(dt));
+      if (success) continue;
+
+      RaposoConsole.Error(message);
+    }
   });
-  defaultEnvironments.lifecycle.running = true;
-}
+});
+
+new GameEnvironment("default", RunService.IsServer());
 
 if (RunService.IsServer()) {
   print("Starting.");
@@ -147,15 +151,6 @@ if (RunService.IsServer()) {
   // if (info.status === "success")
   //   ReplicatedStorage.SetAttribute("ServerLocation", `${info.countryCode}-${info.region}`);
   ReplicatedStorage.SetAttribute("ServerLocation", "NIL-NIL");
-
-  defaultEnvironments.lifecycle.running = true;
-  defaultEnvironments.entity.isServer = true;
-  defaultEnvironments.server = new SessionInstance(
-    "default",
-    defaultEnvironments.network,
-    defaultEnvironments.entity,
-    defaultEnvironments.lifecycle,
-  );
 
   ReplicatedStorage.SetAttribute("ServerRunning", true);
 }

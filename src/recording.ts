@@ -1,12 +1,12 @@
 import { UserInputService } from "@rbxts/services";
-import { ExecuteCommand } from "./cmd";
 import { RaposoConsole } from "logging";
-import { defaultEnvironments } from "./defaultinsts";
+import { BufferReader } from "util/bufferreader";
+import { ExecuteCommand } from "./cmd";
+import { ConsoleFunctionCallback } from "./cmd/cvar";
 import { EntityManager } from "./entities";
 import { LifecycleInstance } from "./lifecycle";
 import { finalizeBufferCreation, startBufferCreation } from "./util/bufferwriter";
-import { ConsoleFunctionCallback } from "./cmd/cvar";
-import { BufferReader } from "util/bufferreader";
+
 
 // # Types
 interface I_EntitySnapshotContent {
@@ -194,7 +194,7 @@ export class CReplayPlayer {
 new ConsoleFunctionCallback(["record", "rec"], [{ name: "name", type: "string" }])
   .setDescription("Records a replay file from the current session.")
   .setCallback((ctx) => {
-    const stopRecordingCallback = RecordEnvironment(defaultEnvironments.entity, defaultEnvironments.lifecycle);
+    const stopRecordingCallback = RecordEnvironment(ctx.env.entity, ctx.env.lifecycle);
     const filename = ctx.getArgument("name", "string").value;
 
     ctx.Reply(`Recording replay ${filename}...`);
@@ -217,7 +217,7 @@ new ConsoleFunctionCallback(["playdemo"], [{ name: "filename", type: "string" }]
   .setCallback((ctx) => {
     const name = ctx.getArgument("filename", "string");
 
-    ExecuteCommand("disconnect"); // Ugly ass hack.
+    ExecuteCommand("disconnect", ctx.env); // Ugly ass hack.
 
     const targetSnapshots = savedReplays.get(tostring(name));
     if (!targetSnapshots) {
@@ -225,10 +225,10 @@ new ConsoleFunctionCallback(["playdemo"], [{ name: "filename", type: "string" }]
       return;
     }
 
-    defaultEnvironments.lifecycle.YieldForTicks(20);
-    defaultEnvironments.entity.isPlayback = true;
+    ctx.env.lifecycle.YieldForTicks(20);
+    ctx.env.isPlayback = true;
 
-    const player = new CReplayPlayer(defaultEnvironments.entity, defaultEnvironments.lifecycle, targetSnapshots);
+    const player = new CReplayPlayer(ctx.env.entity, ctx.env.lifecycle, targetSnapshots);
 
     UserInputService.InputBegan.Connect((input, busy) => {
       if (busy) return;

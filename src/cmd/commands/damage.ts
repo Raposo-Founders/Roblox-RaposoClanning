@@ -1,9 +1,8 @@
 import { defendersCommandCheck } from "cmd/cmdutils";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
@@ -14,8 +13,10 @@ const CMD_INDEX_NAME = "cmd_damage";
 
 // # Bindings & execution
 
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.network.listenPacket(CMD_INDEX_NAME, info => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.network.listenPacket(CMD_INDEX_NAME, info => {
     if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
 
     const reader = BufferReader(info.content);
@@ -23,14 +24,14 @@ SessionInstance.sessionCreated.Connect(inst => {
     const amount = reader.u32();
 
     let callerEntity: PlayerEntity | undefined;
-    for (const ent of inst.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.GetUserFromController() !== info.sender) continue;
       callerEntity = ent;
       break;
     }
     if (!callerEntity) return;
 
-    const targetEntity = inst.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
       ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
       return;
@@ -63,6 +64,6 @@ new ConsoleFunctionCallback(["damage", "dmg"], [{ name: "player", type: "player"
       startBufferCreation();
       writeBufferString(ent.id);
       writeBufferU32(amount as number);
-      defaultEnvironments.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.sendPacket(CMD_INDEX_NAME);
     }
   });

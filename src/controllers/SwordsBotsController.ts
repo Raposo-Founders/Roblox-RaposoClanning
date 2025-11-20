@@ -1,10 +1,10 @@
-import { Players, RunService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import { Players } from "@rbxts/services";
+import GameEnvironment from "core/GameEnvironment";
+
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";
-import SessionInstance from "providers/SessionProvider";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
@@ -222,18 +222,20 @@ function IsPlayerMovingTo(entity: WorldEntity, direction: Vector3) {
 }
 
 // # Execution
-SessionInstance.sessionCreated.Connect(session => {
-  session.entity.entityCreated.Connect(ent => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.entity.entityCreated.Connect(ent => {
     if (!ent.IsA("SwordPlayerEntity")) return;
   });
 
-  session.network.listenPacket(`${NETWORK_REPL_ID}botupd`, packet => {
+  env.network.listenPacket(`${NETWORK_REPL_ID}botupd`, packet => {
     if (!packet.sender) return;
 
     const reader = BufferReader(packet.content);
     const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
-    const entity = session.entity.entities.get(entityId);
+    const entity = env.entity.entities.get(entityId);
     if (!entity?.IsA("SwordPlayerEntity")) return;
     if (entity.GetUserFromNetworkOwner() !== packet.sender) {
       RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${packet.sender}.`);
@@ -244,14 +246,14 @@ SessionInstance.sessionCreated.Connect(session => {
   });
 });
 
-if (RunService.IsClient())
-  defaultEnvironments.lifecycle.BindTickrate(() => {
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  env.lifecycle.BindTickrate(() => {
+    for (const ent of env.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
       if (ent.GetUserFromNetworkOwner() !== Players.LocalPlayer) continue;
       if (ent.health <= 0 || ent.team === PlayerTeam.Spectators) continue;
       if (!DoesInstanceExist(ent.humanoidModel)) continue;
 
-      const target = SearchTargetEntity(defaultEnvironments.entity, ent);
+      const target = SearchTargetEntity(env.entity, ent);
 
       if (target) {
         CalculateMovement(ent, target);
@@ -265,6 +267,7 @@ if (RunService.IsClient())
 
       startBufferCreation();
       ent.WriteStateBuffer();
-      defaultEnvironments.network.sendPacket(`${NETWORK_REPL_ID}botupd`);
+      env.network.sendPacket(`${NETWORK_REPL_ID}botupd`);
     }
   });
+});

@@ -1,7 +1,7 @@
-import { UserInputService, ContextActionService, RunService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
-import { getLocalPlayerEntity } from "./LocalEntityController";
+import { ContextActionService, RunService, UserInputService } from "@rbxts/services";
+import GameEnvironment from "core/GameEnvironment";
 import { IsCameraShiftlockEnabled, SetCameraShiftLockEnabled } from "./CameraController";
+import { getLocalPlayerEntity } from "./LocalEntityController";
 
 // # Variables
 let swordsAutoAttack = false;
@@ -13,7 +13,7 @@ function setAutoAttack(state: Enum.UserInputState, enabled: boolean) {
 }
 
 function swordsAttack() {
-  const entity = getLocalPlayerEntity();
+  const entity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
   if (!entity?.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
   entity.Attack1();
@@ -22,7 +22,7 @@ function swordsAttack() {
 function swordsEquipToggle(state: Enum.UserInputState) {
   if (state.Name !== "End") return;
   
-  const entity = getLocalPlayerEntity();
+  const entity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
   if (!entity?.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
   if (entity.IsWeaponEquipped())
@@ -93,10 +93,14 @@ if (RunService.IsClient()) {
 }
 
 if (RunService.IsClient())
-  defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = getLocalPlayerEntity();
-    if (!entity || entity.health <= 0) return;
+  GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+    if (env.isServer) return;
 
-    if (swordsAutoAttack && entity.IsA("SwordPlayerEntity"))
-      entity.Attack1();
+    env.lifecycle.BindTickrate(() => {
+      const entity = getLocalPlayerEntity(env);
+      if (!entity || entity.health <= 0) return;
+
+      if (swordsAutoAttack && entity.IsA("SwordPlayerEntity"))
+        entity.Attack1();
+    });
   });

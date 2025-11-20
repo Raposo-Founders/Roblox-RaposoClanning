@@ -1,22 +1,20 @@
-import { GroupService, RunService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
+import { GetGroupInfo } from "providers/GroupsProvider";
+import WorldProvider from "providers/WorldProvider";
 import { uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferF32, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
-import { getPlayersFromTeam } from "./PlayerController";
-import { GetGroupInfo } from "providers/GroupsProvider";
-import { webhookLogEvent } from "../systems/WebhookSystem";
 import ChatSystem from "../systems/ChatSystem";
-import WorldProvider from "providers/WorldProvider";
+import { webhookLogEvent } from "../systems/WebhookSystem";
+import { getPlayersFromTeam } from "./PlayerController";
 
 // # Constants & variables
 
 // # Functions
-function SpawnCapturePoints(session: SessionInstance) {
+function SpawnCapturePoints(session: GameEnvironment) {
   for (const obj of WorldProvider.ObjectsFolder.GetChildren()) {
     if (!obj.IsA("BasePart")) continue;
     if (obj.Name !== "ent_objective_capturepoint") continue;
@@ -25,14 +23,14 @@ function SpawnCapturePoints(session: SessionInstance) {
   }
 }
 
-function ResetCapturePoints(session: SessionInstance) {
+function ResetCapturePoints(session: GameEnvironment) {
   for (const ent of session.entity.getEntitiesThatIsA("CapturePointEntity")) {
     ent.capture_progress = 0;
     ent.current_team = PlayerTeam.Spectators;
   }
 }
 
-function ResetPlayers(session: SessionInstance) {
+function ResetPlayers(session: GameEnvironment) {
   for (const ent of session.entity.getEntitiesThatIsA("PlayerEntity")) {
     ent.stats.kills = 0;
     ent.stats.deaths = 0;
@@ -42,7 +40,9 @@ function ResetPlayers(session: SessionInstance) {
 }
 
 // # Bindings & misc
-SessionInstance.sessionCreated.Connect(server => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
   const teamPoints = new Map<PlayerTeam, number>();
   let isRunning = false;
   let targetPoints = 600;
@@ -52,9 +52,9 @@ SessionInstance.sessionCreated.Connect(server => {
   
   let elapsedMatchTime = 0;
   
-  SpawnCapturePoints(server);
+  SpawnCapturePoints(env);
 
-  server.network.listenPacket("match_start", (packet) => {
+  env.network.listenPacket("match_start", (packet) => {
     if (!packet.sender) return;
     if (!packet.sender.GetAttribute(gameValues.adminattr)) return;
 
@@ -70,8 +70,8 @@ SessionInstance.sessionCreated.Connect(server => {
     targetPoints = pointsAmount;
     teamPoints.clear();
 
-    ResetCapturePoints(server);
-    ResetPlayers(server);
+    ResetCapturePoints(env);
+    ResetPlayers(env);
 
     nextUpdateTime = time() + 1;
     elapsedMatchTime = 0;
@@ -82,7 +82,7 @@ SessionInstance.sessionCreated.Connect(server => {
     ChatSystem.sendSystemMessage("!!! MATCH STARTED !!!");
   });
 
-  server.network.listenPacket("match_changepts", (packet) => {
+  env.network.listenPacket("match_changepts", (packet) => {
     if (!packet.sender) return;
     if (!packet.sender.GetAttribute(gameValues.adminattr)) return;
 
@@ -91,7 +91,7 @@ SessionInstance.sessionCreated.Connect(server => {
   });
 
   // Core logic loop
-  server.lifecycle.BindTickrate((dt) => {
+  env.lifecycle.BindTickrate((dt) => {
     if (!isRunning) return;
 
     elapsedMatchTime += dt.tickrate;
@@ -100,7 +100,7 @@ SessionInstance.sessionCreated.Connect(server => {
     if (currentTime < nextUpdateTime) return;
     nextUpdateTime = currentTime + 1;
 
-    for (const ent of server.entity.getEntitiesThatIsA("CapturePointEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("CapturePointEntity")) {
       if (math.abs(ent.capture_progress) !== 1) continue;
       if (ent.current_team === PlayerTeam.Spectators) continue;
 
@@ -117,13 +117,13 @@ SessionInstance.sessionCreated.Connect(server => {
         writeBufferU8(teamIndex);
         writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
         writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
-        server.network.sendPacket("match_ended");
+        env.network.sendPacket("match_ended");
 
         webhookLogEvent(
           teamIndex,
           teamPoints.get(PlayerTeam.Defenders) || 0,
           teamPoints.get(PlayerTeam.Raiders) || 0,
-          server.entity,
+          env.entity,
         );
 
         break;
@@ -132,7 +132,7 @@ SessionInstance.sessionCreated.Connect(server => {
   });
 
   // Match status update
-  server.lifecycle.BindTickrate(ctx => {
+  env.lifecycle.BindTickrate(ctx => {
     startBufferCreation();
     writeBufferU32(targetPoints);
     writeBufferU32(raidingGroupId);
@@ -140,10 +140,10 @@ SessionInstance.sessionCreated.Connect(server => {
     writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
     writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
     writeBufferF32(elapsedMatchTime);
-    server.network.sendPacket("match_update", undefined, undefined, true);
+    env.network.sendPacket("match_update", undefined, undefined, true);
   });
 
-  server.network.listenPacket("match_teamamount", info => {
+  env.network.listenPacket("match_teamamount", info => {
     if (!info.sender) return;
     if (!info.sender.GetAttribute(gameValues.adminattr)) return;
 
@@ -151,10 +151,10 @@ SessionInstance.sessionCreated.Connect(server => {
     const playersAmount = reader.u8();
 
     totalTeamSize = playersAmount;
-    server.attributes.totalTeamSize = playersAmount;
+    env.attributes.totalTeamSize = playersAmount;
   });
 
-  server.network.listenPacket("match_setraiders", info => {
+  env.network.listenPacket("match_setraiders", info => {
     if (!info.sender) return;
     if (!info.sender.GetAttribute(gameValues.adminattr)) return;
 
@@ -162,12 +162,12 @@ SessionInstance.sessionCreated.Connect(server => {
     const groupId = reader.u32();
 
     raidingGroupId = groupId;
-    server.attributes.raidingGroupId = groupId;
+    env.attributes.raidingGroupId = groupId;
 
     ChatSystem.sendSystemMessage(`Set raiders' group to: ${GetGroupInfo(groupId).Name} (${groupId}).`);
 
     // Check to see if all the raiding players are in the raiding group
-    for (const ent of getPlayersFromTeam(server.entity, PlayerTeam.Raiders)) {
+    for (const ent of getPlayersFromTeam(env.entity, PlayerTeam.Raiders)) {
       const controller = ent.GetUserFromController();
       if (!controller || controller.IsInGroup(groupId)) continue;
 
@@ -178,21 +178,23 @@ SessionInstance.sessionCreated.Connect(server => {
     }
   });
 
-  server.lifecycle.BindTickrate(ctx => {
+  env.lifecycle.BindTickrate(ctx => {
     // if (!isRunning) return;
 
-    for (const ent of server.entity.getEntitiesThatIsA("CapturePointEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("CapturePointEntity")) {
       ent.UpdateCaptureProgress(ctx.tickrate);
 
       startBufferCreation();
       ent.WriteStateBuffer();
-      server.network.sendPacket("cpent_update");
+      env.network.sendPacket("cpent_update");
     }
   });
 });
 
-if (RunService.IsClient()) {
-  defaultEnvironments.network.listenPacket("match_update", (packet) => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+
+  env.network.listenPacket("match_update", (packet) => {
     const reader = BufferReader(packet.content);
     const targetPoints = reader.u32();
     const raidingGroupId = reader.u32();
@@ -210,14 +212,14 @@ if (RunService.IsClient()) {
     uiValues.hud_raiders_group[1](raidingGroupId);
   });
 
-  defaultEnvironments.network.listenPacket("cpent_update", (packet) => {
+  env.network.listenPacket("cpent_update", (packet) => {
     const reader = BufferReader(packet.content);
     const entityId = reader.string();
 
-    const targetEntity = defaultEnvironments.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("CapturePointEntity")) {
 
-      defaultEnvironments.entity.createEntity(
+      env.entity.createEntity(
         "CapturePointEntity",
         entityId,
         new CFrame(),
@@ -229,7 +231,7 @@ if (RunService.IsClient()) {
 
     targetEntity.ApplyStateBuffer(reader);
   });
-}
+});
 
 new ConsoleFunctionCallback(["setraiders"], [{ name: "groupId", type: "number" }])
   .setDescription("Sets the raiding group's ID")
@@ -238,7 +240,7 @@ new ConsoleFunctionCallback(["setraiders"], [{ name: "groupId", type: "number" }
 
     startBufferCreation();
     writeBufferU32(raidingGroupId.value);
-    defaultEnvironments.network.sendPacket("match_setraiders");
+    ctx.env.network.sendPacket("match_setraiders");
   });
 
 new ConsoleFunctionCallback(["teamsize"], [{ name: "amount", type: "number" }])
@@ -248,7 +250,7 @@ new ConsoleFunctionCallback(["teamsize"], [{ name: "amount", type: "number" }])
 
     startBufferCreation();
     writeBufferU8(playersAmount);
-    defaultEnvironments.network.sendPacket("match_teamamount");
+    ctx.env.network.sendPacket("match_teamamount");
   });
 
 new ConsoleFunctionCallback(["start"], [{ name: "points", type: "number" }, { name: "raidersGroupId", type: "number" }])
@@ -258,5 +260,5 @@ new ConsoleFunctionCallback(["start"], [{ name: "points", type: "number" }, { na
 
     startBufferCreation();
     writeBufferU32(pointsAmount);
-    defaultEnvironments.network.sendPacket("match_start");
+    ctx.env.network.sendPacket("match_start");
   });

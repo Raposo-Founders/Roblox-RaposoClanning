@@ -1,7 +1,7 @@
+import { BufferReader } from "util/bufferreader";
+import { writeBufferU16 } from "util/bufferwriter";
 import Signal from "util/signal";
 import WorldEntity from "./WorldEntity";
-import { writeBufferU16 } from "util/bufferwriter";
-import { BufferReader } from "util/bufferreader";
 
 declare global {
   interface GameEntities {

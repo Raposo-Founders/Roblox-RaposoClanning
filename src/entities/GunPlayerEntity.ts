@@ -1,17 +1,16 @@
 import * as Services from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { RaposoConsole } from "logging";
 import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
 import { PlayermodelRig } from "providers/PlayermodelProvider/rig";
-import SessionInstance from "providers/SessionProvider";
+import { MapContent, ObjectsFolder } from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferF32, writeBufferU8 } from "util/bufferwriter";
 import { UTIL_TraceLine } from "util/traceline";
+import { generateTracelineParameters } from "util/traceparam";
 import { registerEntityClass } from ".";
 import PlayerEntity from "./PlayerEntity";
-import { MapContent, ObjectsFolder } from "providers/WorldProvider";
-import { generateTracelineParameters } from "util/traceparam";
 
 // # Types
 declare global {
@@ -24,9 +23,6 @@ declare global {
 const NETWORK_ID = "tps_";
 
 const VIEWPORT_RAY_DISTANCE = 500;
-
-const geometryTraceParams = generateTracelineParameters(false, [MapContent.Parts], [], defaultEnvironments.entity, [], [], true);
-const playersTracelineParams = generateTracelineParameters(false, [MapContent.Parts], [], defaultEnvironments.entity, ["PlayerEntity"], [], true);
 
 // # Functions
 
@@ -76,7 +72,7 @@ export class GunPlayerEntity extends PlayerEntity {
 
   Reload(): void { }
 
-  Shoot(target: CFrame) {
+  Shoot(target: CFrame, geometryTraceParams: RaycastParams, playersTracelineParams: RaycastParams) {
     if (!this.playermodel || this.health <= 0) return;
 
     const currentTime = time();
@@ -125,7 +121,7 @@ export class GunPlayerEntity extends PlayerEntity {
     }
 
     if (weptrace.hitVec && weptrace.instance) {
-      const entities = this.environment.getEntitiesFromInstance(weptrace.instance);
+      const entities = this.environment.entity.getEntitiesFromInstance(weptrace.instance);
 
       for (const ent of entities)
         RaposoConsole.Info("WEAPON HIT ENTITY:", ent.id, ent.classname);
@@ -137,6 +133,9 @@ export class GunPlayerEntity extends PlayerEntity {
 
     if (!this.environment.isServer) {
       if (this.GetUserFromController() !== Services.Players.LocalPlayer) return;
+
+      const geometryTraceParams = generateTracelineParameters(false, [MapContent.Parts], [], this.environment.entity, [], [], true);
+      const playersTracelineParams = generateTracelineParameters(false, [MapContent.Parts], [], this.environment.entity, ["PlayerEntity"], [], true);
 
       const mouseLocation = Services.UserInputService.GetMouseLocation();
       const screenSize = workspace.CurrentCamera!.ViewportSize;
@@ -150,7 +149,7 @@ export class GunPlayerEntity extends PlayerEntity {
       );
 
       if (this.buttons.attack1)
-        this.Shoot(new CFrame(trace.hitVec || trace.target));
+        this.Shoot(new CFrame(trace.hitVec || trace.target), geometryTraceParams, playersTracelineParams);
 
       return;
     }
@@ -160,30 +159,32 @@ export class GunPlayerEntity extends PlayerEntity {
 // # Bindings & misc
 registerEntityClass("GunPlayerEntity", GunPlayerEntity);
 
-SessionInstance.sessionCreated.Connect(server => {
-  server.entity.entityCreated.Connect(entity => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.entity.entityCreated.Connect(entity => {
     if (!entity.IsA("GunPlayerEntity")) return;
   });
 
   // Replicating entities
-  server.lifecycle.BindTickrate(() => {
-    const entitiesList = server.entity.getEntitiesThatIsA("GunPlayerEntity");
+  env.lifecycle.BindTickrate(() => {
+    const entitiesList = env.entity.getEntitiesThatIsA("GunPlayerEntity");
 
     startBufferCreation();
     writeBufferU8(math.min(entitiesList.size(), 255)); // Yes... I know this limits only up to 255 entities, dickhead.
     for (const ent of entitiesList)
       ent.WriteStateBuffer();
-    server.network.sendPacket(`${NETWORK_ID}replication`);
+    env.network.sendPacket(`${NETWORK_ID}replication`);
   });
 
   // Client state updating
-  server.network.listenPacket(`${NETWORK_ID}c_stateupd`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}c_stateupd`, (packet) => {
     if (!packet.sender) return;
 
     const reader = BufferReader(packet.content);
     const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
-    const entity = server.entity.entities.get(entityId);
+    const entity = env.entity.entities.get(entityId);
     if (!entity || !entity.IsA("GunPlayerEntity") || entity.GetUserFromController() !== packet.sender) {
       RaposoConsole.Warn(`Invalid ${GunPlayerEntity} state update from ${packet.sender}.`);
       return;
@@ -193,11 +194,14 @@ SessionInstance.sessionCreated.Connect(server => {
   });
 });
 
-if (Services.RunService.IsClient()) {
+// Client
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+
   let hasEntityInQueue = false;
 
   // Entity replication
-  defaultEnvironments.network.listenPacket(`${NETWORK_ID}replication`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}replication`, (packet) => {
     if (hasEntityInQueue) return; // Skip if entities are currently being created.
     // ! MIGHT RESULT IN THE GAME HANGING FROM TIME TO TIME !
 
@@ -209,11 +213,11 @@ if (Services.RunService.IsClient()) {
     for (let i = 0; i < amount; i++) {
       const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
-      let entity = defaultEnvironments.entity.entities.get(entityId);
+      let entity = env.entity.entities.get(entityId);
       if (!entity) {
         hasEntityInQueue = true;
 
-        entity = defaultEnvironments.entity.createEntity("GunPlayerEntity", entityId, "", 1).expect();
+        entity = env.entity.createEntity("GunPlayerEntity", entityId, "", 1).expect();
         hasEntityInQueue = false;
       }
 
@@ -222,19 +226,19 @@ if (Services.RunService.IsClient()) {
     }
 
     // Deleting non-listed entities
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("GunPlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("GunPlayerEntity")) {
       if (listedServerEntities.has(ent.id)) continue;
-      defaultEnvironments.entity.killThisFucker(ent);
+      env.entity.killThisFucker(ent);
     }
   });
 
   // Client state update
-  defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = getLocalPlayerEntity();
+  env.lifecycle.BindTickrate(() => {
+    const entity = getLocalPlayerEntity(env);
     if (!entity || !entity.IsA("GunPlayerEntity") || entity.health <= 0) return;
 
     startBufferCreation();
     entity.WriteStateBuffer();
-    defaultEnvironments.network.sendPacket(`${NETWORK_ID}c_stateupd`, undefined, undefined);
+    env.network.sendPacket(`${NETWORK_ID}c_stateupd`, undefined, undefined);
   });
-}
+});

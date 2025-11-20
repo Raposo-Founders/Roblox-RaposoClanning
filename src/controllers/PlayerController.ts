@@ -1,7 +1,7 @@
 import { LocalizationService, Players, RunService } from "@rbxts/services";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
+import GameEnvironment from "core/GameEnvironment";
 import { sendSystemMessage } from "systems/ChatSystem";
 import { ClanwareCaseSystem } from "systems/ClanwareCaseSystem";
 import { startBufferCreation, writeBufferF32, writeBufferString } from "util/bufferwriter";
@@ -35,14 +35,16 @@ export function getPlayersFromTeam(environment: T_EntityEnvironment, team: Playe
 }
 
 // # Execution
-SessionInstance.sessionCreated.Connect(inst => {
-  inst.playerJoined.Connect((user, referenceId) => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.playerJoined.Connect((user, referenceId) => {
     user.SetAttribute(gameValues.adminattr, ADMIN_ROLES.includes(user.GetRoleInGroup(TARGET_GROUP).upper()) || RunService.IsStudio());
     user.SetAttribute(gameValues.modattr, user.GetAttribute(gameValues.adminattr));
 
     const listedInfo = ClanwareCaseSystem.IsUserListed(user.UserId);
 
-    inst.entity.createEntity("SwordPlayerEntity", formatEntityId(user.UserId), referenceId, user.UserId).andThen(ent => {
+    env.entity.createEntity("SwordPlayerEntity", formatEntityId(user.UserId), referenceId, user.UserId).andThen(ent => {
       ent.died.Connect(attacker => {
 
         if (attacker?.IsA("PlayerEntity")) {
@@ -52,7 +54,7 @@ SessionInstance.sessionCreated.Connect(inst => {
           writeBufferF32(distance);
           writeBufferString(attacker.id);
           writeBufferString(ent.id);
-          inst.network.sendPacket("game_killfeed");
+          env.network.sendPacket("game_killfeed");
         }
 
         task.wait(Players.RespawnTime);
@@ -81,23 +83,23 @@ SessionInstance.sessionCreated.Connect(inst => {
     });
   });
 
-  inst.playerLeft.Connect(user => {
+  env.playerLeft.Connect(user => {
     sendSystemMessage(`${user.Name} has left the game.`);
 
-    const targetEntity = inst.entity.entities.get(formatEntityId(user.UserId));
+    const targetEntity = env.entity.entities.get(formatEntityId(user.UserId));
     if (!targetEntity?.IsA("PlayerEntity")) return;
 
-    inst.entity.killThisFucker(targetEntity);
+    env.entity.killThisFucker(targetEntity);
   });
 
   // Update players ping
   let nextPingUpdateTime = 0;
-  inst.lifecycle.BindTickrate(() => {
+  env.lifecycle.BindTickrate(() => {
     const currentTime = time();
     if (currentTime < nextPingUpdateTime) return;
     nextPingUpdateTime = currentTime + 1;
 
-    for (const user of inst.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const user of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       const controller = user.GetUserFromController();
       if (!controller) continue;
 

@@ -1,5 +1,5 @@
 import { Players } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import Signal from "util/signal";
 
@@ -10,6 +10,8 @@ interface CommandContext {
   Error: (message: string) => void;
 
   getArgument: <T extends CONFUNC_TYPES>(name: string, expectedType: T) => CFunctionArgument<T>;
+
+  env: GameEnvironment,
 }
 
 type CONFUNC_TYPES = "string" | "strings" | "number" | "team" | "player";
@@ -60,14 +62,14 @@ function getTeamFromString(value: string) {
   return PlayerTeam[targetTeamId];
 }
 
-function getPlayersFromString(value: string, caller: Player) {
+function getPlayersFromString(value: string, caller: Player, env: GameEnvironment) {
   const foundPlayers: PlayerEntity[] = [];
 
   // Searching by team
   if (value.sub(0, 1) === "%") {
     const targetTeam = getTeamFromString(value.gsub("%%", "")[0]);
 
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (PlayerTeam[ent.team] !== targetTeam) continue;
       foundPlayers.push(ent);
     }
@@ -77,7 +79,7 @@ function getPlayersFromString(value: string, caller: Player) {
 
   // Referencing themselves
   if (value === "me") {
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.GetUserFromController() !== caller) continue;
       foundPlayers.push(ent);
       break;
@@ -94,7 +96,7 @@ function getPlayersFromString(value: string, caller: Player) {
     for (const username of usernamesSplit)
       formattedUsernamesSplit.push(formatString(username.lower()));
 
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       const controller = ent.GetUserFromController();
       const name = (controller ? controller.Name : ent.id).lower();
 
@@ -110,7 +112,7 @@ function getPlayersFromString(value: string, caller: Player) {
   return foundPlayers;
 }
 
-export function convertConsoleArgumentType(argumenttype: CONFUNC_TYPES, values: string[], caller: Player): CONFUNC_TYPES_Converted {
+export function convertConsoleArgumentType(argumenttype: CONFUNC_TYPES, values: string[], caller: Player, env: GameEnvironment): CONFUNC_TYPES_Converted {
   if (argumenttype === "string")
     return tostring(values.shift());
 
@@ -121,7 +123,7 @@ export function convertConsoleArgumentType(argumenttype: CONFUNC_TYPES, values: 
     return getTeamFromString(tostring(values.shift()));
 
   if (argumenttype === "player")
-    return getPlayersFromString(tostring(values.shift()), caller);
+    return getPlayersFromString(tostring(values.shift()), caller, env);
 
   // Returning the "values" table itself
   const clonedObj = table.clone(values);
@@ -184,7 +186,7 @@ export class ConsoleFunctionCallback {
     return this;
   }
 
-  execute(args: string[]) {
+  execute(args: string[], env: GameEnvironment) {
     if (!this.callback) {
       print(`No callback has been set for command ${this.names[0]}, ignoring call...`); // This print message is an special occasion (circular dependency)
       return;
@@ -194,7 +196,7 @@ export class ConsoleFunctionCallback {
 
     for (let i = 0; i < this.args.size(); i++) {
       const element = this.args[i];
-      convertedArguments.set(element.name, { name: element.name, value: convertConsoleArgumentType(element.type, args, Players.LocalPlayer) as never });
+      convertedArguments.set(element.name, { name: element.name, value: convertConsoleArgumentType(element.type, args, Players.LocalPlayer, env) as never });
     }
 
     const contextEnvironment: CommandContext = {
@@ -214,6 +216,8 @@ export class ConsoleFunctionCallback {
 
         return target;
       },
+
+      env,
     };
 
     this.callback(contextEnvironment);

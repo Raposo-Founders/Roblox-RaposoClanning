@@ -1,12 +1,11 @@
 import * as Services from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
-import { RaposoConsole } from "logging";
-import { createHealthBarForEntity } from "./healthbar";
-import { PlayermodelRig } from "./rig";
 import { colorTable } from "UI/values";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
+import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import { RaposoConsole } from "logging";
 import { DoesInstanceExist } from "util/utilfuncs";
+import { createHealthBarForEntity } from "./healthbar";
+import { PlayermodelRig } from "./rig";
 
 // # Constants & variables
 const entityPlayermodels = new Map<EntityId, PlayermodelRig>();
@@ -99,7 +98,7 @@ export function createPlayermodelForEntity(entity: PlayerEntity) {
     entity.AssociateInstance(inst);
   }
 
-  const unbindConnection1 = defaultEnvironments.lifecycle.BindLateUpdate(() => {
+  const unbindConnection1 = entity.environment.lifecycle.BindLateUpdate(() => {
     const entityPart = entity.humanoidModel?.HumanoidRootPart;
     const playermodelPart = playermodel.rig.PrimaryPart;
 
@@ -124,7 +123,7 @@ export function createPlayermodelForEntity(entity: PlayerEntity) {
     playermodel.highlight.OutlineColor = Color3.fromHex(fillColor);
 
     {
-      const localEntity = getLocalPlayerEntity();
+      const localEntity = getLocalPlayerEntity(entity.environment);
       if (localEntity && entity !== localEntity)
         playermodel.highlight.DepthMode = localEntity.team === entity.team ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
     }
@@ -132,7 +131,7 @@ export function createPlayermodelForEntity(entity: PlayerEntity) {
 
   // Playermodel position update
   let currentPositionThread: thread | undefined;
-  const unbindConnection2 = defaultEnvironments.lifecycle.BindTickrate(ctx => {
+  const unbindConnection2 = entity.environment.lifecycle.BindTickrate(ctx => {
     const playermodelPart = playermodel.rig.PrimaryPart;
     if (entity.health <= 0 || !DoesInstanceExist(entity.humanoidModel) || !DoesInstanceExist(playermodelPart)) return;
 

@@ -11,7 +11,7 @@ interface I_ThreadYieldInfo {
 type T_UpdateCallbackInfo = (ctx: LifecycleInstance, deltaTime: number) => void;
 
 // # Constants & variables
-export const TICKRATE = 1 / 33;
+export const TICKRATE = 1 / 20;
 
 // # Functions
 export function earlyUpdateLifecycleInstances(dt: number) {

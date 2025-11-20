@@ -4,7 +4,8 @@ import ReactRoblox from "@rbxts/react-roblox";
 import { Players, UserInputService } from "@rbxts/services";
 import { ExecuteCommand } from "cmd";
 import { CCVar, ConsoleFunctionCallback, createdCVars } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
+
 import { CONSOLE_OUT, ConsoleOutputType } from "logging";
 import { Window } from "UI/blocks/window";
 import { uiValues } from "UI/values";
@@ -49,7 +50,7 @@ function InputBarElement() {
   {
     const connection = focusTextBox.Connect(() => {
       if (!textboxRef.current || !textboxRef.current.TextEditable) return;
-      defaultEnvironments.lifecycle.YieldForTicks(2);
+      GameEnvironment.GetDefaultEnvironment().lifecycle.YieldForTicks(2);
       if (masterVisible.getValue())
         textboxRef.current.CaptureFocus();
       else
@@ -137,7 +138,7 @@ function InputBarElement() {
               }
             });
 
-            ExecuteCommand(text).finally(() => {
+            ExecuteCommand(text, GameEnvironment.GetDefaultEnvironment()).finally(() => {
               task.cancel(thread1);
               rbx.Text = text;
               SpawnInputBar();

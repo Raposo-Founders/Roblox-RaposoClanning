@@ -50,10 +50,7 @@ export class EntityManager {
   readonly entityCreated = new Signal<[Entity: BaseEntity]>();
   readonly entityDeleting = new Signal<[Entity: BaseEntity]>();
 
-  isServer = RunService.IsServer();
-  isPlayback = false;
-
-  constructor() { }
+  constructor(public environment: T_GameEnvironment) { }
 
   async createEntity<
     K extends keyof GameEntities,
@@ -81,7 +78,7 @@ export class EntityManager {
       throw `Entity of id ${entityId} already exists as an ${this.entities.get(entityId)!.classname}.`;
 
     const entity = new entity_constructor(...(args as never[]));
-    rawset(entity, "environment", this);
+    rawset(entity, "environment", this.environment);
     rawset(entity, "id", entityId);
 
     this.entities.set(entity.id, entity);

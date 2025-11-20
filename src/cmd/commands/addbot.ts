@@ -1,9 +1,8 @@
-import { Players, RunService } from "@rbxts/services";
+import { Players } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import ChatSystem from "systems/ChatSystem";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferString } from "util/bufferwriter";
@@ -20,22 +19,23 @@ new ConsoleFunctionCallback(["addbot"], [{ name: "name", type: "string" }])
 
     startBufferCreation();
     writeBufferString(entityName.value);
-    defaultEnvironments.network.sendPacket(CMD_INDEX_NAME);
+    ctx.env.network.sendPacket(CMD_INDEX_NAME);
   });
 
-SessionInstance.sessionCreated.Connect(inst => {
-  
-  inst.network.listenPacket(CMD_INDEX_NAME, info => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.network.listenPacket(CMD_INDEX_NAME, info => {
     if (!info.sender) return;
 
     const reader = BufferReader(info.content);
     const entityName = reader.string();
 
-    const sessionList = SessionInstance.GetServersFromPlayer(info.sender);
+    const sessionList = GameEnvironment.GetServersFromPlayer(info.sender);
 
     for (const session of sessionList) {
       let callerEntity: PlayerEntity | undefined;
-      for (const ent of inst.entity.getEntitiesThatIsA("PlayerEntity")) {
+      for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
         if (ent.GetUserFromController() !== info.sender) continue;
         callerEntity = ent;
         break;
@@ -58,7 +58,7 @@ SessionInstance.sessionCreated.Connect(inst => {
             currentThread = task.spawn(() => {
               while (ent.health > 0) {
                 ent.Attack1();
-                inst.lifecycle.YieldForTicks(1);
+                env.lifecycle.YieldForTicks(1);
               }
             });
           });

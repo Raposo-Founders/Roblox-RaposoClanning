@@ -1,15 +1,15 @@
 import ColorUtils from "@rbxts/colour-utils";
-import { Debris, Players, RunService, TweenService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import { Players, RunService, TweenService } from "@rbxts/services";
+import GameEnvironment from "core/GameEnvironment";
+
 import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
-import { getPlayerEntityFromController, PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "entities/PlayerEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import { modelsFolder } from "folders";
-import { gameValues, getInstanceDefinedValue } from "gamevalues";
+import { getInstanceDefinedValue } from "gamevalues";
 import { NetworkManager } from "network";
 import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
-import SessionInstance from "providers/SessionProvider";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
@@ -114,9 +114,11 @@ function ClientHandleHitboxTouched(attacker: SwordPlayerEntity, target: HealthEn
 }
 
 // # Bindings & misc
-SessionInstance.sessionCreated.Connect(server => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
   // Listening for damage
-  server.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
     if (!packet.sender) return;
 
     const reader = BufferReader(packet.content);
@@ -124,8 +126,8 @@ SessionInstance.sessionCreated.Connect(server => {
     const attackerId = reader.string();
     const victimId = reader.string();
 
-    const attackerEntity = server.entity.entities.get(attackerId);
-    const victimEntity = server.entity.entities.get(victimId);
+    const attackerEntity = env.entity.entities.get(attackerId);
+    const victimEntity = env.entity.entities.get(victimId);
     if (!attackerEntity?.IsA("SwordPlayerEntity") || !victimEntity?.IsA("HealthEntity")) return;
 
     if (!CheckPlayers(attackerEntity, victimEntity)) return;
@@ -153,8 +155,11 @@ SessionInstance.sessionCreated.Connect(server => {
   });
 });
 
-if (RunService.IsClient())
-  defaultEnvironments.entity.entityCreated.Connect(ent => {
+// Client
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+
+  env.entity.entityCreated.Connect(ent => {
     if (!ent.IsA("SwordPlayerEntity")) return;
 
     const lastEntitiesHitTime = new Map<string, number>();
@@ -195,13 +200,13 @@ if (RunService.IsClient())
     lungeSound.clearOnFinish = false;
 
     const touchedConnection = swordModel.Touched.Connect(other => {
-      if (defaultEnvironments.entity.isPlayback) return;
+      if (env.isPlayback) return;
       if (!ent.IsWeaponEquipped()) return;
       if (!DoesInstanceExist(playermodel.rig)) return;
       if (other.IsDescendantOf(WorldProvider.MapFolder)) return;
       if (other.IsDescendantOf(playermodel.rig)) return; // Hitting ourselves, ignore...
 
-      const relatedEntities = defaultEnvironments.entity.getEntitiesFromInstance(other);
+      const relatedEntities = env.entity.getEntitiesFromInstance(other);
       if (relatedEntities.size() <= 0) return;
 
       for (const entity of relatedEntities) {
@@ -211,7 +216,7 @@ if (RunService.IsClient())
         if (time() - lastHitTime < 0.06) continue;
         lastEntitiesHitTime.set(entity.id, time());
 
-        ClientHandleHitboxTouched(ent, entity, other, defaultEnvironments.network);
+        ClientHandleHitboxTouched(ent, entity, other, env.network);
       }
     });
 
@@ -224,7 +229,7 @@ if (RunService.IsClient())
         swingSound.Play();
     });
 
-    const unbindLifecycleUpdate1 = defaultEnvironments.lifecycle.BindTickrate(() => {
+    const unbindLifecycleUpdate1 = env.lifecycle.BindTickrate(() => {
       const isEquipped = ent.health > 0 && ent.IsWeaponEquipped();
 
       swordMotor.C1 = getGripPosition();
@@ -241,3 +246,4 @@ if (RunService.IsClient())
 
     print("Finished setting up", ent.classname, ent.id);
   });
+});

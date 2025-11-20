@@ -2,7 +2,7 @@ import ColorUtils from "@rbxts/colour-utils";
 import React from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { Players, RunService, TweenService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { colorTable } from "UI/values";
 
@@ -31,7 +31,7 @@ const MASTER_SIZE = UDim2.fromOffset(
 );
 
 // # Functions
-function EntityHealthBar(props: { entity: PlayerEntity, part: BasePart }) {
+function EntityHealthBar(props: { env: T_GameEnvironment, entity: PlayerEntity, part: BasePart }) {
   const [frameVisibleBinding, setVisible] = React.createBinding(false);
   const [framePositionBinding, setPosition] = React.createBinding(UDim2.fromOffset(-100, -100));
   const [scaleAmountBinding, setScale] = React.createBinding(1);
@@ -41,8 +41,8 @@ function EntityHealthBar(props: { entity: PlayerEntity, part: BasePart }) {
   const barsContentReference = React.createRef<Frame>();
   const registeredFrames: HealthFrameSectionInfo[] = [];
 
-  let defaultLifecycleUnbind: Callback | undefined = defaultEnvironments.lifecycle.BindLateUpdate(() => {
-    if (!defaultEnvironments.entity.isEntityOnMemoryOrImSchizo(props.entity)) return;
+  let defaultLifecycleUnbind: Callback | undefined = props.env.lifecycle.BindLateUpdate(() => {
+    if (!props.env.entity.isEntityOnMemoryOrImSchizo(props.entity)) return;
 
     if (props.entity.health <= 0) {
       setVisible(false);
@@ -125,7 +125,7 @@ function EntityHealthBar(props: { entity: PlayerEntity, part: BasePart }) {
     };
 
     let updateThread: thread | undefined = task.spawn(() => {
-      while (defaultEnvironments.entity.isEntityOnMemoryOrImSchizo(props.entity)) {
+      while (props.env.entity.isEntityOnMemoryOrImSchizo(props.entity)) {
         let backgroundColor = colorTable.spectatorsColor;
         if (props.entity.team === PlayerTeam.Defenders) backgroundColor = colorTable.defendersColor;
         if (props.entity.team === PlayerTeam.Raiders) backgroundColor = colorTable.raidersColor;
@@ -133,7 +133,7 @@ function EntityHealthBar(props: { entity: PlayerEntity, part: BasePart }) {
         setAccentColor(ColorUtils.Lighten(Color3.fromHex(backgroundColor), 0.5));
 
         mountFrames();
-        defaultEnvironments.lifecycle.YieldForTicks(20);
+        props.env.lifecycle.YieldForTicks(20);
       }
     });
     
@@ -199,7 +199,7 @@ function EntityHealthBar(props: { entity: PlayerEntity, part: BasePart }) {
 
 export function createHealthBarForEntity(entity: PlayerEntity, part: BasePart) {
   const root = ReactRoblox.createRoot(SCREENGUI, { "hydrate": true });
-  root.render(<EntityHealthBar entity={entity} part={part} />);
+  root.render(<EntityHealthBar entity={entity} part={part} env={entity.environment} />);
 
   entity.OnDelete(() => {
     root.unmount();

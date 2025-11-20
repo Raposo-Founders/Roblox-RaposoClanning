@@ -1,11 +1,9 @@
 import { Players, RunService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { clientSessionConnected, clientSessionDisconnected, defaultEnvironments } from "defaultinsts";
-import { EntityManager } from "entities";
-import { LifecycleInstance } from "lifecycle";
+import GameEnvironment from "core/GameEnvironment";
+import { clientSessionConnected, clientSessionDisconnected } from "defaultinsts";
 import { RaposoConsole } from "logging";
-import { listenDirectPacket, NetworkManager, sendDirectPacket } from "network";
-import SessionInstance from "providers/SessionProvider";
+import { listenDirectPacket, sendDirectPacket } from "network";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferBool, writeBufferString, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
 import Signal from "util/signal";
@@ -37,6 +35,8 @@ export function clientConnectToServerSession(sessionId: string) {
   assert(RunService.IsClient(), "Function can only be called from the client.");
   assert(canConnect, "Function is on cooldown.");
 
+  const defaultEnvironment = GameEnvironment.GetDefaultEnvironment();
+
   canConnect = false;
   currentConnectionThread = coroutine.running();
 
@@ -53,7 +53,7 @@ export function clientConnectToServerSession(sessionId: string) {
     return;
   }
 
-  defaultEnvironments.entity?.murderAllFuckers();
+  defaultEnvironment.entity?.murderAllFuckers();
 
   task.wait(CONNECTION_STEP_COOLDOWN);
 
@@ -70,21 +70,16 @@ export function clientConnectToServerSession(sessionId: string) {
 export function clientCreateLocalSession() {
   assert(RunService.IsClient(), "Function can only be called from the client.");
 
-  const serverInst = new SessionInstance(
-    "local",
-    new NetworkManager(),
-    new EntityManager(),
-    new LifecycleInstance(),
-  );
-  defaultEnvironments.server = serverInst;
+  const defaultEnvironment = GameEnvironment.GetDefaultEnvironment();
+  const serverInst = new GameEnvironment("local", true);
 
   serverInst.network.remoteEnabled = false;
   const serverSessionConnection = serverInst.network.packetPosted.Connect(packet => {
-    defaultEnvironments.network.insertNetwork(packet);
+    defaultEnvironment.network.insertNetwork(packet);
   });
 
-  defaultEnvironments.network.remoteEnabled = false;
-  const clientSessionConnection = defaultEnvironments.network.packetPosted.Connect(packet => {
+  defaultEnvironment.network.remoteEnabled = false;
+  const clientSessionConnection = defaultEnvironment.network.packetPosted.Connect(packet => {
     serverInst.network.insertNetwork(packet);
   });
 
@@ -96,8 +91,7 @@ export function clientCreateLocalSession() {
     serverSessionConnection.Disconnect();
     clientSessionConnection.Disconnect();
 
-    defaultEnvironments.network.remoteEnabled = true;
-    defaultEnvironments.server = undefined;
+    defaultEnvironment.network.remoteEnabled = true;
 
     connection.Disconnect();
   });
@@ -160,7 +154,7 @@ if (RunService.IsServer())
     const reader = BufferReader(bfr);
     const sessionId = reader.string();
 
-    const targetSession = SessionInstance.instances.get(sessionId);
+    const targetSession = GameEnvironment.runningInstances.get(sessionId);
 
     if (!targetSession) {
       startBufferCreation();
@@ -208,7 +202,7 @@ if (RunService.IsServer())
     const reader = BufferReader(bfr);
     const sessionId = reader.string();
 
-    const targetSession = SessionInstance.instances.get(sessionId);
+    const targetSession = GameEnvironment.runningInstances.get(sessionId);
     if (!targetSession || !usersInConnectionProcess.has(sender)) return;
 
     targetSession.RegisterPlayer(sender);
@@ -225,14 +219,14 @@ if (RunService.IsClient())
 
     RaposoConsole.Warn("Disconnected from session. Reason:", reason);
 
-    defaultEnvironments.entity.murderAllFuckers();
+    GameEnvironment.GetDefaultEnvironment().entity.murderAllFuckers();
   });
 
 if (RunService.IsServer())
   listenDirectPacket("disconnect_request", (sender) => {
     if (!sender) return;
 
-    const sessionList = SessionInstance.GetServersFromPlayer(sender);
+    const sessionList = GameEnvironment.GetServersFromPlayer(sender);
 
     for (const session of sessionList)
       session.RemovePlayer(sender, "Disconnected by user.");
@@ -244,8 +238,8 @@ if (RunService.IsServer())
     if (!sender) return;
 
     startBufferCreation();
-    writeBufferU8(SessionInstance.instances.size());
-    for (const [serverId, inst] of SessionInstance.instances) {
+    writeBufferU8(GameEnvironment.runningInstances.size());
+    for (const [serverId, inst] of GameEnvironment.runningInstances) {
       writeBufferString(serverId);
 
       writeBufferU8(inst.players.size());

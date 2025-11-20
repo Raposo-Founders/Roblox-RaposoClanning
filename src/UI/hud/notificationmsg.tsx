@@ -3,10 +3,9 @@ import React, { useEffect } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { Players, RunService, TextService, TweenService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
-import SessionInstance from "providers/SessionProvider";
 import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferString } from "util/bufferwriter";
@@ -51,7 +50,7 @@ export async function RenderPlayerShout(userId: number, color: Color3, duration:
     const startingTime = time();
 
     let binding: Callback | undefined;
-    binding = defaultEnvironments.lifecycle.BindUpdate(() => {
+    binding = GameEnvironment.GetDefaultEnvironment().lifecycle.BindUpdate(() => {
       const elapsedTime = time() - startingTime;
       const backgroundAlpha = TweenService.GetValue(elapsedTime / ANIMATION_DURATION, "Exponential", "Out");
       const contentAlpha = TweenService.GetValue(elapsedTime / (ANIMATION_DURATION + animationTimeOffset), "Exponential", "Out");
@@ -71,7 +70,7 @@ export async function RenderPlayerShout(userId: number, color: Color3, duration:
     const startingTime = time();
 
     let binding: Callback | undefined;
-    binding = defaultEnvironments.lifecycle.BindUpdate(() => {
+    binding = GameEnvironment.GetDefaultEnvironment().lifecycle.BindUpdate(() => {
       const elapsedTime = time() - startingTime;
       const backgroundAlpha = TweenService.GetValue(elapsedTime / (ANIMATION_DURATION + animationTimeOffset), "Exponential", "In");
       const contentAlpha = TweenService.GetValue(elapsedTime / ANIMATION_DURATION, "Exponential", "In");
@@ -204,12 +203,13 @@ new ConsoleFunctionCallback(["shout", "message", "m"], [{ name: "message", type:
 
     startBufferCreation();
     writeBufferString(ctx.getArgument("message", "strings").value.join(" "));
-    defaultEnvironments.network.sendPacket("message_shout");
+    ctx.env.network.sendPacket("message_shout");
   });
 
-SessionInstance.sessionCreated.Connect(inst => {
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
 
-  inst.network.listenPacket("message_shout", (info) => {
+  env.network.listenPacket("message_shout", (info) => {
     if (!info.sender) return;
     if (!info.sender.GetAttribute(gameValues.modattr)) return;
 
@@ -221,29 +221,32 @@ SessionInstance.sessionCreated.Connect(inst => {
     writeBufferString(tostring(info.sender.UserId));
     writeBufferString(tostring(info.sender.GetAttribute(gameValues.usersessionid)));
     writeBufferString(filteredMessage.GetNonChatStringForBroadcastAsync());
-    inst.network.sendPacket("message_shouted");
+    env.network.sendPacket("message_shouted");
   });
-
 });
 
-if (RunService.IsClient())
-  defaultEnvironments.network.listenPacket("message_shouted", (info) => {
+// Client
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+
+  env.network.listenPacket("message_shouted", (info) => {
     const reader = BufferReader(info.content);
     const userId = tonumber(reader.string()) ?? 1;
     const userSessionId = reader.string();
     const message = reader.string();
-
+  
     let entity: PlayerEntity | undefined;
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.controller !== userSessionId) continue;
       entity = ent;
       break;
     }
     if (!entity) return;
-
+  
     let teamColor = colorTable.spectatorsColor;
     if (entity.team === PlayerTeam.Raiders) teamColor = colorTable.raidersColor;
     if (entity.team === PlayerTeam.Defenders) teamColor = colorTable.defendersColor;
-
+  
     RenderPlayerShout(userId, Color3.fromHex(teamColor), 10, message);
   });
+});

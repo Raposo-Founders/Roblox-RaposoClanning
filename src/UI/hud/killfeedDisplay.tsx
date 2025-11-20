@@ -1,7 +1,7 @@
 import React, { createRef } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { UserInputService } from "@rbxts/services";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
@@ -10,7 +10,7 @@ import { BufferReader } from "util/bufferreader";
 
 // # Functions
 function PlayerFrame(props: { entityId: string, layoutOrder: number }) {
-  const entity = defaultEnvironments.entity.entities.get(props.entityId);
+  const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId);
   if (!entity?.IsA("PlayerEntity")) return <></>;
 
   const controller = entity.GetUserFromController();
@@ -56,8 +56,8 @@ function PlayerFrame(props: { entityId: string, layoutOrder: number }) {
 }
 
 function KillfeedPost(props: { KillerEntityId: string, distance: number, VictimEntityId: string }) {
-  const killerEntity = defaultEnvironments.entity.entities.get(props.KillerEntityId);
-  const victimEntity = defaultEnvironments.entity.entities.get(props.VictimEntityId);
+  const killerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.KillerEntityId);
+  const victimEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.VictimEntityId);
 
   if (!killerEntity?.IsA("PlayerEntity") || !victimEntity?.IsA("PlayerEntity"))
     return <></>;
@@ -111,7 +111,7 @@ function KillfeedPost(props: { KillerEntityId: string, distance: number, VictimE
 export function KillfeedDisplay() {
   const parentFrameReference = createRef<Frame>();
 
-  defaultEnvironments.network.listenPacket("game_killfeed", info => {
+  GameEnvironment.GetDefaultEnvironment().network.listenPacket("game_killfeed", info => {
     if (!parentFrameReference.current) return;
 
     const reader = BufferReader(info.content);

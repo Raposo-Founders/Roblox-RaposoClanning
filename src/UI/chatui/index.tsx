@@ -2,7 +2,8 @@ import ColorUtils from "@rbxts/colour-utils";
 import React from "@rbxts/react";
 import { UserInputService } from "@rbxts/services";
 import { ExecuteCommand } from "cmd";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
+
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { DefaultButton } from "UI/blocks/btn";
@@ -29,7 +30,7 @@ export function ChatBar() {
     toggleChatVisibility.Connect(visible => {
       if (!reference.current) return;
 
-      defaultEnvironments.lifecycle.YieldForTicks(2);
+      GameEnvironment.GetDefaultEnvironment().lifecycle.YieldForTicks(2);
 
       if (visible === undefined)
         reference.current.Visible = !reference.current.Visible;
@@ -77,7 +78,7 @@ export function ChatBar() {
             for (const cmd of split) {
               if (cmd === "") continue;
 
-              ExecuteCommand(cmd).expect();
+              ExecuteCommand(cmd, GameEnvironment.GetDefaultEnvironment()).expect();
               task.wait();
               task.wait(); // Double trouble :)
             }

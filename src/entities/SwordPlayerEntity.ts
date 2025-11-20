@@ -1,10 +1,9 @@
 import * as Services from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
-import { defaultEnvironments } from "defaultinsts";
+import GameEnvironment from "core/GameEnvironment";
 import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
 import { getPlayermodelFromEntity } from "providers/PlayermodelProvider";
-import SessionInstance from "providers/SessionProvider";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferBool, writeBufferString, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
 import Signal from "util/signal";
@@ -110,7 +109,7 @@ export class SwordPlayerEntity extends PlayerEntity {
   async Attack1() {
     if (!this.environment.isServer && !this.environment.isPlayback) {
       startBufferCreation();
-      defaultEnvironments.network.sendPacket(`${NETWORK_ID}c_activate`);
+      this.environment.network.sendPacket(`${NETWORK_ID}c_activate`);
 
       return;
     }
@@ -161,8 +160,11 @@ export class SwordPlayerEntity extends PlayerEntity {
 // # Bindings & misc
 registerEntityClass("SwordPlayerEntity", SwordPlayerEntity);
 
-SessionInstance.sessionCreated.Connect(server => {
-  server.entity.entityCreated.Connect(entity => {
+// Server
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (!env.isServer) return;
+
+  env.entity.entityCreated.Connect(entity => {
     if (!entity.IsA("SwordPlayerEntity")) return;
 
     // Listen for state changes
@@ -170,39 +172,45 @@ SessionInstance.sessionCreated.Connect(server => {
       startBufferCreation();
       writeBufferString(entity.id);
       writeBufferU8(entity.currentState);
-      server.network.sendPacket(`${NETWORK_ID}changed`);
+      env.network.sendPacket(`${NETWORK_ID}changed`);
     });
   });
 
   // Activation requests
-  server.network.listenPacket(`${NETWORK_ID}c_activate`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}c_activate`, (packet) => {
     if (!packet.sender) return;
 
-    const entity = getPlayerEntityFromController(server.entity, tostring(packet.sender.GetAttribute(gameValues.usersessionid)));
+    const entity = getPlayerEntityFromController(env.entity, tostring(packet.sender.GetAttribute(gameValues.usersessionid)));
     if (!entity || !entity.IsA("SwordPlayerEntity")) return;
 
     entity.Attack1();
   });
 
   // Replicating entities
-  server.lifecycle.BindTickrate(() => {
-    const entitiesList = server.entity.getEntitiesThatIsA("SwordPlayerEntity");
+  env.lifecycle.BindTickrate(() => {
+    const entitiesList = env.entity.getEntitiesThatIsA("SwordPlayerEntity");
 
     startBufferCreation();
     writeBufferU8(math.min(entitiesList.size(), 255)); // Yes... I know this limits only up to 255 entities, dickhead.
     for (const ent of entitiesList)
+      writeBufferString(ent.id);
+    env.network.sendPacket(`${NETWORK_ID}sync`);
+
+    for (const ent of env.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
+      startBufferCreation();
       ent.WriteStateBuffer();
-    server.network.sendPacket(`${NETWORK_ID}replication`);
+      env.network.sendPacket(`${NETWORK_ID}replication`);
+    }
   });
 
   // Client state updating
-  server.network.listenPacket(`${NETWORK_ID}c_stateupd`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}c_stateupd`, (packet) => {
     if (!packet.sender) return;
 
     const reader = BufferReader(packet.content);
     const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
-    const entity = server.entity.entities.get(entityId);
+    const entity = env.entity.entities.get(entityId);
     if (!entity?.IsA("SwordPlayerEntity")) return;
     if (entity.GetUserFromController() !== packet.sender) {
       RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${packet.sender}.`);
@@ -213,11 +221,14 @@ SessionInstance.sessionCreated.Connect(server => {
   });
 });
 
-if (Services.RunService.IsClient()) {
+// Client
+GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (env.isServer) return;
+  
   let hasEntityInQueue = false;
 
   // Entity replication
-  defaultEnvironments.network.listenPacket(`${NETWORK_ID}replication`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}sync`, (packet) => {
     if (hasEntityInQueue) return; // Skip if entities are currently being created.
     // ! MIGHT RESULT IN THE GAME HANGING FROM TIME TO TIME !
 
@@ -227,45 +238,55 @@ if (Services.RunService.IsClient()) {
     const amount = reader.u8();
 
     for (let i = 0; i < amount; i++) {
-      const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
+      const entityId = reader.string();
 
-      let entity = defaultEnvironments.entity.entities.get(entityId);
+      let entity = env.entity.entities.get(entityId);
       if (!entity) {
         hasEntityInQueue = true;
 
-        entity = defaultEnvironments.entity.createEntity("SwordPlayerEntity", entityId, "", 1).expect();
+        entity = env.entity.createEntity("SwordPlayerEntity", entityId, "", 1).expect();
         hasEntityInQueue = false;
       }
 
       listedServerEntities.add(entityId);
-      entity.ApplyStateBuffer(reader);
     }
 
     // Deleting unlisted entities
-    for (const ent of defaultEnvironments.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
+    for (const ent of env.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
       if (listedServerEntities.has(ent.id)) continue;
-      defaultEnvironments.entity.killThisFucker(ent);
+      env.entity.killThisFucker(ent);
     }
   });
 
+  // Entity replication
+  env.network.listenPacket(`${NETWORK_ID}replication`, (packet) => {
+    const reader = BufferReader(packet.content);
+    const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
+
+    const entity = env.entity.entities.get(entityId);
+    if (!entity?.IsA("SwordPlayerEntity")) return;
+
+    entity.ApplyStateBuffer(reader);
+  });
+
   // Client state update
-  defaultEnvironments.lifecycle.BindTickrate(() => {
-    const entity = getLocalPlayerEntity();
+  env.lifecycle.BindTickrate(() => {
+    const entity = getLocalPlayerEntity(env);
     if (!entity || !entity.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
     startBufferCreation();
     entity.WriteStateBuffer();
-    defaultEnvironments.network.sendPacket(`${NETWORK_ID}c_stateupd`, undefined, undefined);
+    env.network.sendPacket(`${NETWORK_ID}c_stateupd`, undefined, undefined);
   });
 
   // Sword / attack changes
-  defaultEnvironments.network.listenPacket(`${NETWORK_ID}changed`, (packet) => {
+  env.network.listenPacket(`${NETWORK_ID}changed`, (packet) => {
     const reader = BufferReader(packet.content);
 
     const entityId = reader.string();
     const newState = reader.u8();
 
-    const targetEntity = defaultEnvironments.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("SwordPlayerEntity")) return;
     if (targetEntity.currentState === newState) return;
 
@@ -275,5 +296,4 @@ if (Services.RunService.IsClient()) {
     if (newState === SwordState.Swing)
       targetEntity.Swing();
   });
-}
-
+});
