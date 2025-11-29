@@ -1,14 +1,14 @@
 import ColorUtils from "@rbxts/colour-utils";
 import React, { useEffect } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
-import { Players, RunService, TextService, TweenService } from "@rbxts/services";
+import { Players, TextService, TweenService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const ANIMATION_DURATION = 0.25;
@@ -201,27 +201,26 @@ new ConsoleFunctionCallback(["shout", "message", "m"], [{ name: "message", type:
   .setCallback(ctx => {
     ctx.Reply("Message shouted.");
 
-    startBufferCreation();
+    const packet = new NetworkPacket("message_shout");
     writeBufferString(ctx.getArgument("message", "strings").value.join(" "));
-    ctx.env.network.sendPacket("message_shout");
+    ctx.env.network.SendPacket(packet);
   });
 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket("message_shout", (info) => {
-    if (!info.sender) return;
-    if (!info.sender.GetAttribute(gameValues.modattr)) return;
+  env.network.ListenPacket("message_shout", (sender, reader) => {
+    if (!sender) return;
+    if (!sender.GetAttribute(gameValues.modattr)) return;
 
-    const reader = BufferReader(info.content);
     const message = reader.string();
-    const filteredMessage = TextService.FilterStringAsync(message, info.sender.UserId, "PublicChat");
+    const filteredMessage = TextService.FilterStringAsync(message, sender.UserId, "PublicChat");
 
-    startBufferCreation();
-    writeBufferString(tostring(info.sender.UserId));
-    writeBufferString(tostring(info.sender.GetAttribute(gameValues.usersessionid)));
+    const packet = new NetworkPacket("message_shouted");
+    writeBufferString(tostring(sender.UserId));
+    writeBufferString(tostring(sender.GetAttribute(gameValues.usersessionid)));
     writeBufferString(filteredMessage.GetNonChatStringForBroadcastAsync());
-    env.network.sendPacket("message_shouted");
+    env.network.SendPacket(packet);
   });
 });
 
@@ -229,8 +228,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (env.isServer) return;
 
-  env.network.listenPacket("message_shouted", (info) => {
-    const reader = BufferReader(info.content);
+  env.network.ListenPacket("message_shouted", (sender, reader) => {
     const userId = tonumber(reader.string()) ?? 1;
     const userSessionId = reader.string();
     const message = reader.string();

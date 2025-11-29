@@ -1,4 +1,3 @@
-import { NetworkManager } from "network";
 import GameEnvironment from "core/GameEnvironment";
 
 // # Types

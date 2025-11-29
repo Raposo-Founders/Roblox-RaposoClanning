@@ -103,10 +103,8 @@ export function createPlayermodelForEntity(entity: PlayerEntity) {
     const playermodelPart = playermodel.rig.PrimaryPart;
 
     if (playermodelPart && entityPart && entity.health > 0) {
-      // playermodelPart.Anchored = true;
-
-      if (entity.GetUserFromController() === Services.Players.LocalPlayer)
-        playermodelPart.CFrame = entityPart.CFrame;
+      playermodelPart.Anchored = true;
+      playermodelPart.CFrame = entityPart.CFrame;
       playermodelPart.AssemblyLinearVelocity = entityPart.AssemblyLinearVelocity;
     }
 
@@ -129,45 +127,12 @@ export function createPlayermodelForEntity(entity: PlayerEntity) {
     }
   });
 
-  // Playermodel position update
-  let currentPositionThread: thread | undefined;
-  const unbindConnection2 = entity.environment.lifecycle.BindTickrate(ctx => {
-    const playermodelPart = playermodel.rig.PrimaryPart;
-    if (entity.health <= 0 || !DoesInstanceExist(entity.humanoidModel) || !DoesInstanceExist(playermodelPart)) return;
-
-    if (currentPositionThread) {
-      task.cancel(currentPositionThread);
-      currentPositionThread = undefined;
-    }
-
-    currentPositionThread = task.spawn(() => {
-      const startingPosition = playermodelPart.CFrame;
-      const targetPosition = entity.humanoidModel?.HumanoidRootPart.CFrame ?? entity.origin;
-      const startingTime = time();
-
-      while (game) {
-        const passedTime = time() - startingTime;
-        const alpha = math.clamp(passedTime / ctx.tickrate, 0, math.huge);
-
-        playermodelPart.CFrame = startingPosition.Lerp(targetPosition, alpha);
-
-        Services.RunService.RenderStepped.Wait();
-      }
-    });
-  });
-
   entity.spawned.Connect(origin => {
-    if (currentPositionThread) {
-      task.cancel(currentPositionThread);
-      currentPositionThread = undefined;
-    }
-
     playermodel.rig.PrimaryPart?.PivotTo(origin);
   });
 
   entity.OnDelete(() => {
     unbindConnection1();
-    unbindConnection2();
     playermodel.Destroy();
 
     entityPlayermodels.delete(entity.id);

@@ -4,7 +4,6 @@ import { UserInputService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
 
 // # Constants & Variables
 
@@ -111,10 +110,9 @@ function KillfeedPost(props: { KillerEntityId: string, distance: number, VictimE
 export function KillfeedDisplay() {
   const parentFrameReference = createRef<Frame>();
 
-  GameEnvironment.GetDefaultEnvironment().network.listenPacket("game_killfeed", info => {
+  GameEnvironment.GetDefaultEnvironment().network.ListenPacket("game_killfeed", (sender, reader) => {
     if (!parentFrameReference.current) return;
 
-    const reader = BufferReader(info.content);
     const distance = reader.f32();
     const attackerEntityId = reader.string();
     const victimEntityId = reader.string();

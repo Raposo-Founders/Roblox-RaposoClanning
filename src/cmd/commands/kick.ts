@@ -1,12 +1,12 @@
 import { defendersCommandCheck } from "cmd/cmdutils";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_kick";
@@ -16,22 +16,21 @@ const CMD_INDEX_NAME = "cmd_kick";
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket(CMD_INDEX_NAME, info => {
-    if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
+  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
 
-    const reader = BufferReader(info.content);
     const entityId = reader.string();
     const reason = reader.string();
 
     // TODO: Properly make this command only available for admins
-    if (!info.sender.GetAttribute(gameValues.adminattr)) {
+    if (!sender.GetAttribute(gameValues.adminattr)) {
       ChatSystem.sendSystemMessage("Players cannot be kicked by temporary moderators.");
       return;
     }
 
     let callerEntity: PlayerEntity | undefined;
     for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
-      if (ent.GetUserFromController() !== info.sender) continue;
+      if (ent.GetUserFromController() !== sender) continue;
       callerEntity = ent;
       break;
     }
@@ -39,7 +38,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
-      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
+      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
       return;
     }
 
@@ -55,7 +54,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       const targetEntityController = targetEntity.GetUserFromController();
 
       if (targetEntityController)
-        env.RemovePlayer(targetEntityController, `Kicked by administrator.\n\n${info.sender.Name}: ${reason}.`);
+        env.RemovePlayer(targetEntityController, `Kicked by administrator.\n\n${sender.Name}: ${reason}.`);
       else
         env.entity.killThisFucker(targetEntity);
     }
@@ -74,9 +73,9 @@ new ConsoleFunctionCallback(["kick"], [{ name: "player", type: "player" }, { nam
     }
 
     for (const ent of targetPlayers) {
-      startBufferCreation();
+      const packet = new NetworkPacket(CMD_INDEX_NAME);
       writeBufferString(ent.id);
       writeBufferString(reason.join(" "));
-      ctx.env.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.SendPacket(packet);
     }
   });

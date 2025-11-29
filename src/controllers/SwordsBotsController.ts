@@ -1,12 +1,11 @@
 import { Players } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Types
@@ -229,16 +228,15 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     if (!ent.IsA("SwordPlayerEntity")) return;
   });
 
-  env.network.listenPacket(`${NETWORK_REPL_ID}botupd`, packet => {
-    if (!packet.sender) return;
+  env.network.ListenPacket(`${NETWORK_REPL_ID}botupd`, (sender, reader) => {
+    if (!sender) return;
 
-    const reader = BufferReader(packet.content);
     const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
     const entity = env.entity.entities.get(entityId);
     if (!entity?.IsA("SwordPlayerEntity")) return;
-    if (entity.GetUserFromNetworkOwner() !== packet.sender) {
-      RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${packet.sender}.`);
+    if (entity.GetUserFromNetworkOwner() !== sender) {
+      RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${sender}.`);
       return;
     }
 
@@ -265,9 +263,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       ent.velocity = ent.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
       ent.grounded = ent.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
 
-      startBufferCreation();
+      const packet = new NetworkPacket(`${NETWORK_REPL_ID}botupd`);
       ent.WriteStateBuffer();
-      env.network.sendPacket(`${NETWORK_REPL_ID}botupd`);
+      env.network.SendPacket(packet);
     }
   });
 });

@@ -1,8 +1,9 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
-import { startBufferCreation, writeBufferString } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_joke";
@@ -12,16 +13,16 @@ const CMD_INDEX_NAME = "cmd_joke";
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket(CMD_INDEX_NAME, info => {
-    if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
+  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
 
-    ChatSystem.sendSystemMessage(`Nice try ${info.sender.Name}, but this is not Kohl's admin.`);
+    ChatSystem.sendSystemMessage(`Nice try ${sender.Name}, but this is not Kohl's admin.`);
   });
 }); 
 
 new ConsoleFunctionCallback(["fly", "ff", "forcefield", "invisible", "invis", "god"], [])
   .setCallback((ctx) => {
-    startBufferCreation();
+    const packet = new NetworkPacket(CMD_INDEX_NAME);
     writeBufferString("joke");
-    ctx.env.network.sendPacket(CMD_INDEX_NAME);
+    ctx.env.network.SendPacket(packet);
   });

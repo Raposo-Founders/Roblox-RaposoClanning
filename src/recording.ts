@@ -4,7 +4,7 @@ import { BufferReader } from "util/bufferreader";
 import { ExecuteCommand } from "./cmd";
 import { ConsoleFunctionCallback } from "./cmd/cvar";
 import { EntityManager } from "./entities";
-import { LifecycleInstance } from "./lifecycle";
+import { LifecycleContainer } from "./core/GameLifecycle";
 import { finalizeBufferCreation, startBufferCreation } from "./util/bufferwriter";
 
 
@@ -26,7 +26,7 @@ const savedReplays = new Map<string, I_SnapshotInfo[]>();
 let stopRecordingConnection: Callback | undefined;
 
 // # Functions
-function RecordEnvironment(entityEnvironment: EntityManager, lifecycleEnvironment: LifecycleInstance) {
+function RecordEnvironment(entityEnvironment: EntityManager, lifecycleEnvironment: LifecycleContainer) {
   const snapshots = new Array<I_SnapshotInfo>();
   const startingTime = time();
 
@@ -72,7 +72,7 @@ export class CReplayPlayer {
 
   private _entitiesOnCreationQueue = new Set<string>();
 
-  constructor(private _environment: EntityManager, private _lifecycle: LifecycleInstance, private _replayData: I_SnapshotInfo[]) {
+  constructor(private _environment: EntityManager, private _lifecycle: LifecycleContainer, private _replayData: I_SnapshotInfo[]) {
     _replayData.sort((a, b) => {
       return a.time < b.time;
     });

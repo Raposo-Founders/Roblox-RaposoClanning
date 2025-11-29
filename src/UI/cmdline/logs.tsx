@@ -5,12 +5,12 @@ import { Players, RunService } from "@rbxts/services";
 import { COMMAND_EXECUTED } from "cmd";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 
 import { gameValues } from "gamevalues";
 import { Window } from "UI/blocks/window";
 import { uiValues } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString, writeBufferU64 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU64 } from "util/bufferwriter";
 
 // # Constants & variables
 const COMMAND_NETWORK_ID = "command_execution_log";
@@ -86,30 +86,32 @@ export function ConsoleCommandsLogs() {
 COMMAND_EXECUTED.Connect((name, args) => {
   registerCommandExecutionLog(name, args.join(" "));
 
-  startBufferCreation();
+  const packet = new NetworkPacket(COMMAND_NETWORK_ID);
+
   writeBufferString(name);
   writeBufferString(args.join(" "));
-  GameEnvironment.GetDefaultEnvironment().network.sendPacket(COMMAND_NETWORK_ID);
+  GameEnvironment.GetDefaultEnvironment().network.SendPacket(packet);
 });
 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket(COMMAND_NETWORK_ID, info => {
-    if (!info.sender) return;
+  env.network.ListenPacket(COMMAND_NETWORK_ID, (sender, reader) => {
+    if (!sender) return;
 
-    const reader = BufferReader(info.content);
     const name = reader.string();
     const args = reader.string();
 
     for (const user of env.players) {
-      if (user === info.sender) continue;
+      if (user === sender) continue;
 
-      startBufferCreation();
-      writeBufferU64(info.sender.UserId);
+      const packet = new NetworkPacket(COMMAND_NETWORK_ID);
+      packet.players = [user];
+
+      writeBufferU64(sender.UserId);
       writeBufferString(name);
       writeBufferString(args);
-      env.network.sendPacket(COMMAND_NETWORK_ID, [user]);
+      env.network.SendPacket(packet);
     }
   });
 });
@@ -118,8 +120,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (env.isServer) return;
 
-  env.network.listenPacket(COMMAND_NETWORK_ID, info => {
-    const reader = BufferReader(info.content);
+  env.network.ListenPacket(COMMAND_NETWORK_ID, (sender, reader) => {
     const executor = reader.u64();
     const name = reader.string();
     const args = reader.string();

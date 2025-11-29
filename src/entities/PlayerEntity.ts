@@ -1,4 +1,4 @@
-import { Players } from "@rbxts/services";
+import { Players, TweenService } from "@rbxts/services";
 import { modelsFolder } from "folders";
 import { gameValues } from "gamevalues";
 import WorldProvider from "providers/WorldProvider";
@@ -7,6 +7,7 @@ import { writeBufferBool, writeBufferString, writeBufferU16, writeBufferU64, wri
 import Signal from "util/signal";
 import { EntityManager, registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
+import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Types
 declare global {
@@ -26,6 +27,8 @@ export enum PlayerTeam {
   Raiders,
   Spectators,
 }
+
+const activePlayermodelTweens = new Map<string, Tween>();
 
 const positionDifferenceThreshold = 3;
 
@@ -227,6 +230,29 @@ export default class PlayerEntity extends HealthEntity {
       this.caseInfo.isDegenerate = isDegenerate;
 
       this.networkOwner = networkOwner;
+
+      // Tween our playermodel
+      if (!this.environment.isServer && this.humanoidModel && DoesInstanceExist(this.humanoidModel.PrimaryPart) && (!isLocalBot && !isLocalPlayer)) {
+        const tweenId = `${this.environment.id}_${this.id}`;
+
+        let tween = activePlayermodelTweens.get(tweenId);
+
+        if (tween) {
+          const currentPosition = this.humanoidModel.GetPivot();
+
+          if (tween.PlaybackState === Enum.PlaybackState.Playing)
+            tween.Cancel();
+          tween.Destroy();
+          tween = undefined;
+
+          this.humanoidModel?.PivotTo(currentPosition);
+        }
+
+        tween = TweenService.Create(this.humanoidModel.PrimaryPart!, new TweenInfo(this.environment.lifecycle.tickrate, Enum.EasingStyle.Linear), { CFrame: this.origin });
+
+        activePlayermodelTweens.set(tweenId, tween);
+        tween.Play();
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import { BufferReader } from "util/bufferreader";
 import BaseEntity from "./BaseEntity";
-import { writeBufferVector } from "util/bufferwriter";
+import { BufferByteType, writeBufferVector } from "util/bufferwriter";
 
 declare global {
   interface GameEntities {
@@ -17,6 +17,9 @@ abstract class WorldEntity extends BaseEntity {
     super();
 
     this.inheritanceList.add("WorldEntity");
+
+    this.RegisterNetworkableProperty("origin", BufferByteType.vec);
+    this.RegisterNetworkableProperty("velocity", BufferByteType.vec);
   }
 
   WriteStateBuffer(): void {

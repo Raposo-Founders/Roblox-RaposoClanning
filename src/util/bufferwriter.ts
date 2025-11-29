@@ -47,7 +47,7 @@ export function writeBufferU8(value: number) {
   });
 }
 
-export function writeBufferI8(bufferInfo: IBufferCreator, value: number) {
+export function writeBufferI8(value: number) {
   const thread = coroutine.running();
   const bufferQueue = bufferCreationThreads.get(thread);
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
@@ -58,8 +58,6 @@ export function writeBufferI8(bufferInfo: IBufferCreator, value: number) {
     type: BufferByteType.i8,
     value: value,
   });
-
-  bufferInfo.currentSize += 8;
 }
 
 export function writeBufferU16(value: number) {

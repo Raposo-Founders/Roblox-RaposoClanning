@@ -1,5 +1,4 @@
-import { RunService } from "@rbxts/services";
-import { RandomString } from "./util/utilfuncs";
+import { RandomString } from "../util/utilfuncs";
 
 // # Types
 interface I_ThreadYieldInfo {
@@ -8,42 +7,31 @@ interface I_ThreadYieldInfo {
   thread: thread;
 }
 
-type T_UpdateCallbackInfo = (ctx: LifecycleInstance, deltaTime: number) => void;
+type T_UpdateCallbackInfo = (ctx: LifecycleContainer, deltaTime: number) => void;
 
 // # Constants & variables
 export const TICKRATE = 1 / 20;
 
 // # Functions
-export function earlyUpdateLifecycleInstances(dt: number) {
-  for (const [, instance] of LifecycleInstance.instances) {
-    instance.FireUpdate(dt);
-    instance.FireTickUpdate(dt);
-  }
-}
-export function lateUpdateLifecycleInstances(dt: number) {
-  for (const [, instance] of LifecycleInstance.instances) {
-    instance.FireLateUpdate(dt);
-  }
-}
 
 // # Classes
-export class LifecycleInstance {
-  static instances = new Map<string, LifecycleInstance>();
+export class LifecycleContainer {
+  static instances = new Map<string, LifecycleContainer>();
 
   private readonly _id = RandomString(20);
   running = false;
   tickrate = TICKRATE;
+  readonly currentTick = 0;
   private _passedTickrateTime = 0;
 
   private readonly _boundUpdateCallbacks = new Map<string, T_UpdateCallbackInfo>();
   private readonly _boundLateUpdateCallbacks = new Map<string, T_UpdateCallbackInfo>();
   private readonly _boundTickCallbacks = new Map<string, T_UpdateCallbackInfo>();
 
-  private readonly _connections = new Array<RBXScriptConnection>();
   private readonly _yieldingThreads = new Map<string, I_ThreadYieldInfo>();
 
   constructor() {
-    LifecycleInstance.instances.set(this._id, this);
+    LifecycleContainer.instances.set(this._id, this);
   }
 
   FireUpdate(deltaTime: number) {
@@ -69,6 +57,8 @@ export class LifecycleInstance {
     const updateTimes = math.floor(this._passedTickrateTime / this.tickrate);
 
     for (let i = 0; i < updateTimes; i++) {
+      rawset(this, "currentTick", this.currentTick + 1);
+
       for (const [, callback] of this._boundTickCallbacks)
         task.spawn(callback, this, deltaTime);
 
@@ -118,7 +108,7 @@ export class LifecycleInstance {
   }
 
   Destroy() {
-    LifecycleInstance.instances.delete(this._id);
+    LifecycleContainer.instances.delete(this._id);
 
     this.running = false;
 
@@ -129,16 +119,6 @@ export class LifecycleInstance {
     for (const [, info] of this._yieldingThreads)
       task.cancel(info.thread);
     this._yieldingThreads.clear();
-
-    for (const connection of this._connections)
-      connection.Disconnect();
-    this._connections.clear();
-
-    if (RunService.IsClient()) {
-      RunService.UnbindFromRenderStep(`${this._id}_lifecycle_update`);
-      RunService.UnbindFromRenderStep(`${this._id}_lifecycle_lateupdate`);
-      RunService.UnbindFromRenderStep(`${this._id}_lifecycle_tickupdate`);
-    }
 
     task.defer(() => {
       task.wait(1);

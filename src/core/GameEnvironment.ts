@@ -1,12 +1,12 @@
 import { Players } from "@rbxts/services";
-import { LifecycleInstance } from "lifecycle";
+import { LifecycleContainer } from "core/GameLifecycle";
 import { RaposoConsole } from "logging";
 import { EntityManager } from "../entities";
 import { gameValues } from "../gamevalues";
-import { NetworkManager, sendDirectPacket } from "../network";
 import { startBufferCreation, writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
 import { RandomString } from "../util/utilfuncs";
+import { NetworkDataStreamer, SendStandardMessage } from "./NetworkModel";
 
 // # Types
 type T_EnvironmentBinding = (env: GameEnvironment) => void;
@@ -36,29 +36,29 @@ class GameEnvironment {
     raidingGroupId: 0,
   };
 
-  readonly network = new NetworkManager();
+  readonly network = new NetworkDataStreamer();
   readonly entity = new EntityManager(this);
-  readonly lifecycle = new LifecycleInstance();
+  readonly lifecycle = new LifecycleContainer();
 
   isPlayback = false;
 
   constructor(readonly id: string, readonly isServer: boolean) {
     RaposoConsole.Warn(`Creating game environment ${id}`);
-
     GameEnvironment.runningInstances.set(id, this);
+
+    this.connections.push(Players.PlayerRemoving.Connect(user => this.RemovePlayer(user, "Left the game.")));
+
+    this.network.shouldDeliverPacket = sender => this.players.has(sender);
+    this.network.ListenPacket("disconnect_request", sender => {
+      if (!sender) return;
+      this.RemovePlayer(sender, "Disconnected by user.");
+    });
+
+    this.lifecycle.running = true;
 
     // Execute bindings
     for (const callback of GameEnvironment.boundCallbacks)
       task.spawn(callback, this);
-
-    this.connections.push(Players.PlayerRemoving.Connect(user => this.RemovePlayer(user, "Left the game.")));
-
-    this.network.listenPacket("disconnect_request", (packet) => {
-      if (!packet.sender) return;
-      this.RemovePlayer(packet.sender, "Disconnected by user.");
-    });
-
-    this.lifecycle.running = true;
   }
 
   async Close() {
@@ -105,7 +105,6 @@ class GameEnvironment {
 
     player.SetAttribute(gameValues.usersessionid, referenceId);
 
-    this.network.signedUsers.add(player);
     this.players.add(player);
     this.playerJoined.Fire(player, referenceId);
   }
@@ -116,11 +115,8 @@ class GameEnvironment {
     print(`${player.Name} has left the server ${this.id}. (${disconnectreason})`);
     player.SetAttribute(gameValues.usersessionid, undefined);
 
-    startBufferCreation();
-    writeBufferString(disconnectreason);
-    sendDirectPacket("server_disconnected", player);
+    SendStandardMessage("server_disconnected", { disconnectreason }, player);
 
-    this.network.signedUsers.delete(player);
     this.players.delete(player);
     this.playerLeft.Fire(player, disconnectreason);
 

@@ -18,7 +18,7 @@ export function getLocalPlayerEntity(env: GameEnvironment) {
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (env.isServer) return;
 
-  env.lifecycle.BindUpdate(() => {
+  env.lifecycle.BindLateUpdate(() => {
     if (env.isPlayback) return;
 
     const entity = getLocalPlayerEntity(env);

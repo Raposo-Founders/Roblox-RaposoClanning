@@ -1,13 +1,10 @@
 import ColorUtils from "@rbxts/colour-utils";
 import { Players, RunService, TextChatService, UserInputService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-
+import { ListenStandardMessage, SendStandardMessage } from "core/NetworkModel";
 import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
-import { listenDirectPacket, sendDirectPacket } from "network";
 import { RenderChatMessage } from "UI/chatui/chatwindow";
 import { colorTable, uiValues } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString } from "util/bufferwriter";
 import { ReplicatedInstance } from "util/utilfuncs";
 import { SoundsPath, SoundSystem } from "./SoundSystem";
 
@@ -48,9 +45,7 @@ namespace ChatSystem {
       for (const user of targetPlayers) {
         if (ignorePlayers.includes(user) || !user.IsDescendantOf(Players)) continue;
 
-        startBufferCreation();
-        writeBufferString(text);
-        sendDirectPacket(CHAT_SYSMSG_NETID, user);
+        SendStandardMessage(CHAT_SYSMSG_NETID, { text }, user);
       }
 
       return;
@@ -62,12 +57,7 @@ namespace ChatSystem {
 
 // # Execution
 if (RunService.IsClient())
-  listenDirectPacket(CHAT_SYSMSG_NETID, (_, bfr) => {
-    const reader = BufferReader(bfr);
-    const message = reader.string();
-
-    DEFAULT_CHANNEL.DisplaySystemMessage(message);
-  });
+  ListenStandardMessage(CHAT_SYSMSG_NETID, (sender, obj) => DEFAULT_CHANNEL.DisplaySystemMessage(tostring(obj.text)));
 
 if (RunService.IsServer()) {
   Players.PlayerAdded.Connect(user => {

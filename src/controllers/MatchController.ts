@@ -1,12 +1,12 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import { GetGroupInfo } from "providers/GroupsProvider";
 import WorldProvider from "providers/WorldProvider";
 import { uiValues } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferF32, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferF32, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
 import ChatSystem from "../systems/ChatSystem";
 import { webhookLogEvent } from "../systems/WebhookSystem";
 import { getPlayersFromTeam } from "./PlayerController";
@@ -54,16 +54,14 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   
   SpawnCapturePoints(env);
 
-  env.network.listenPacket("match_start", (packet) => {
-    if (!packet.sender) return;
-    if (!packet.sender.GetAttribute(gameValues.adminattr)) return;
+  env.network.ListenPacket("match_start", (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;
 
     if (raidingGroupId === 0) {
       ChatSystem.sendSystemMessage(`Unable to start match: Raiding group id must be set first with ${gameValues.cmdprefix}setraiders <groupId>.`);
       return;
     }
 
-    const reader = BufferReader(packet.content);
     const pointsAmount = reader.u32();
 
     isRunning = true;
@@ -82,11 +80,8 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     ChatSystem.sendSystemMessage("!!! MATCH STARTED !!!");
   });
 
-  env.network.listenPacket("match_changepts", (packet) => {
-    if (!packet.sender) return;
-    if (!packet.sender.GetAttribute(gameValues.adminattr)) return;
-
-    const reader = BufferReader(packet.content);
+  env.network.ListenPacket("match_changepts", (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;
     targetPoints = reader.u32();
   });
 
@@ -112,12 +107,12 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       if (points >= targetPoints) {
         isRunning = false;
 
-        startBufferCreation();
+        const packet = new NetworkPacket("match_ended");
         // writeBufferU32(targetPoints);
         writeBufferU8(teamIndex);
         writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
         writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
-        env.network.sendPacket("match_ended");
+        env.network.SendPacket(packet);
 
         webhookLogEvent(
           teamIndex,
@@ -133,32 +128,30 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
   // Match status update
   env.lifecycle.BindTickrate(ctx => {
-    startBufferCreation();
+    const packet = new NetworkPacket("match_update");
+    packet.reliable = false;
+
     writeBufferU32(targetPoints);
     writeBufferU32(raidingGroupId);
     writeBufferU8(totalTeamSize);
     writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
     writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
     writeBufferF32(elapsedMatchTime);
-    env.network.sendPacket("match_update", undefined, undefined, true);
+    env.network.SendPacket(packet);
   });
 
-  env.network.listenPacket("match_teamamount", info => {
-    if (!info.sender) return;
-    if (!info.sender.GetAttribute(gameValues.adminattr)) return;
+  env.network.ListenPacket("match_teamamount", (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;
 
-    const reader = BufferReader(info.content);
     const playersAmount = reader.u8();
 
     totalTeamSize = playersAmount;
     env.attributes.totalTeamSize = playersAmount;
   });
 
-  env.network.listenPacket("match_setraiders", info => {
-    if (!info.sender) return;
-    if (!info.sender.GetAttribute(gameValues.adminattr)) return;
+  env.network.ListenPacket("match_setraiders", (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;
 
-    const reader = BufferReader(info.content);
     const groupId = reader.u32();
 
     raidingGroupId = groupId;
@@ -184,9 +177,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     for (const ent of env.entity.getEntitiesThatIsA("CapturePointEntity")) {
       ent.UpdateCaptureProgress(ctx.tickrate);
 
-      startBufferCreation();
+      const packet = new NetworkPacket("cpent_update");
       ent.WriteStateBuffer();
-      env.network.sendPacket("cpent_update");
+      env.network.SendPacket(packet);
     }
   });
 });
@@ -194,8 +187,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (env.isServer) return;
 
-  env.network.listenPacket("match_update", (packet) => {
-    const reader = BufferReader(packet.content);
+  env.network.ListenPacket("match_update", (sender, reader) => {
     const targetPoints = reader.u32();
     const raidingGroupId = reader.u32();
     const matchTeamSize = reader.u8();
@@ -212,8 +204,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     uiValues.hud_raiders_group[1](raidingGroupId);
   });
 
-  env.network.listenPacket("cpent_update", (packet) => {
-    const reader = BufferReader(packet.content);
+  env.network.ListenPacket("cpent_update", (sender, reader) => {
     const entityId = reader.string();
 
     const targetEntity = env.entity.entities.get(entityId);
@@ -238,9 +229,9 @@ new ConsoleFunctionCallback(["setraiders"], [{ name: "groupId", type: "number" }
   .setCallback(ctx => {
     const raidingGroupId = ctx.getArgument("groupId", "number");
 
-    startBufferCreation();
+    const packet = new NetworkPacket("match_setraiders");
     writeBufferU32(raidingGroupId.value);
-    ctx.env.network.sendPacket("match_setraiders");
+    ctx.env.network.SendPacket(packet);
   });
 
 new ConsoleFunctionCallback(["teamsize"], [{ name: "amount", type: "number" }])
@@ -248,9 +239,9 @@ new ConsoleFunctionCallback(["teamsize"], [{ name: "amount", type: "number" }])
   .setCallback((ctx) => {
     const playersAmount = math.min(ctx.getArgument("amount", "number").value, 255);
 
-    startBufferCreation();
+    const packet = new NetworkPacket("match_teamamount");
     writeBufferU8(playersAmount);
-    ctx.env.network.sendPacket("match_teamamount");
+    ctx.env.network.SendPacket(packet);
   });
 
 new ConsoleFunctionCallback(["start"], [{ name: "points", type: "number" }, { name: "raidersGroupId", type: "number" }])
@@ -258,7 +249,7 @@ new ConsoleFunctionCallback(["start"], [{ name: "points", type: "number" }, { na
   .setCallback((ctx) => {
     const pointsAmount = ctx.getArgument("points", "number").value;
 
-    startBufferCreation();
+    const packet = new NetworkPacket("match_start");
     writeBufferU32(pointsAmount);
-    ctx.env.network.sendPacket("match_start");
+    ctx.env.network.SendPacket(packet);
   });

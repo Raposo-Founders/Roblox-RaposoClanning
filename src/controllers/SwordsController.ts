@@ -1,20 +1,18 @@
 import ColorUtils from "@rbxts/colour-utils";
-import { Players, RunService, TweenService } from "@rbxts/services";
+import { Players, TweenService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-
+import { NetworkDataStreamer, NetworkPacket } from "core/NetworkModel";
 import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
 import { PlayerTeam } from "entities/PlayerEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import { modelsFolder } from "folders";
 import { getInstanceDefinedValue } from "gamevalues";
-import { NetworkManager } from "network";
 import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU8 } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Constants & variables
@@ -51,15 +49,15 @@ function CheckPlayers<T extends BaseEntity>(entity1: SwordPlayerEntity, entity2:
   return true;
 }
 
-function ClientWriteNetworkHit(network: NetworkManager, mode: NetworkSwordHitIndex, attacker: EntityId, victim: EntityId) {
-  startBufferCreation();
+function ClientWriteNetworkHit(network: NetworkDataStreamer, mode: NetworkSwordHitIndex, attacker: EntityId, victim: EntityId) {
+  const packet = new NetworkPacket(`${NETWORK_ID}hit`);
   writeBufferU8(mode);
   writeBufferString(attacker);
   writeBufferString(victim);
-  network.sendPacket(`${NETWORK_ID}hit`);
+  network.SendPacket(packet);
 }
 
-function ClientHandleHitboxTouched(attacker: SwordPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkManager) {
+function ClientHandleHitboxTouched(attacker: SwordPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkDataStreamer) {
   const spawnHitHighlight = (color: string) => {
     if (!part.Parent?.FindFirstChildWhichIsA("Humanoid")) return;
 
@@ -118,10 +116,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
   // Listening for damage
-  env.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
-    if (!packet.sender) return;
+  env.network.ListenPacket(`${NETWORK_ID}hit`, (sender, reader) => {
+    if (!sender) return;
 
-    const reader = BufferReader(packet.content);
     const hitIndex = reader.u8();
     const attackerId = reader.string();
     const victimId = reader.string();
@@ -140,15 +137,15 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     if (hitIndex === NetworkSwordHitIndex.BotToOther) {
       // Check to see if the caller is the owner of the bot
-      if (attackerEntity.GetUserFromNetworkOwner() !== packet.sender) return;
+      if (attackerEntity.GetUserFromNetworkOwner() !== sender) return;
     }
 
     if (hitIndex === NetworkSwordHitIndex.LocalToOther) {
-      if (attackerEntity.GetUserFromController() !== packet.sender) return;
+      if (attackerEntity.GetUserFromController() !== sender) return;
     }
 
     if (hitIndex === NetworkSwordHitIndex.OtherToLocal) {
-      if (!victimEntity?.IsA("SwordPlayerEntity") || victimEntity.GetUserFromController() !== packet.sender) return;
+      if (!victimEntity?.IsA("SwordPlayerEntity") || victimEntity.GetUserFromController() !== sender) return;
     }
 
     victimEntity.takeDamage(totalDealingDamage, attackerEntity);

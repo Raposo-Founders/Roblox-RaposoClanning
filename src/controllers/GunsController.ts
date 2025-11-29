@@ -1,14 +1,13 @@
 import ColorUtils from "@rbxts/colour-utils";
 import { TweenService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkDataStreamer } from "core/NetworkModel";
 import BaseEntity from "entities/BaseEntity";
 import { GunPlayerEntity } from "entities/GunPlayerEntity";
 import HealthEntity from "entities/HealthEntity";
 import { getPlayerEntityFromController, PlayerTeam } from "entities/PlayerEntity";
 import { gameValues, getInstanceDefinedValue } from "gamevalues";
-import { NetworkManager } from "network";
 import { ObjectsFolder } from "providers/WorldProvider";
-import { BufferReader } from "util/bufferreader";
 
 // # Constants & variables
 const NETWORK_ID = "tpscon_";
@@ -37,7 +36,7 @@ function CheckPlayers<T extends BaseEntity>(entity1: GunPlayerEntity, entity2: T
   return true;
 }
 
-function ClientHandleHit(attacker: GunPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkManager) {
+function ClientHandleHit(attacker: GunPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkDataStreamer) {
   const spawnHitHighlight = (color: string) => {
     if (!part.Parent?.FindFirstChildWhichIsA("Humanoid")) return;
 
@@ -61,14 +60,13 @@ function ClientHandleHit(attacker: GunPlayerEntity, target: HealthEntity, part: 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   // Listening for damage
   if (env.isServer)
-    env.network.listenPacket(`${NETWORK_ID}hit`, (packet) => {
-      if (!packet.sender) return;
+    env.network.ListenPacket(`${NETWORK_ID}hit`, (sender, reader) => {
+      if (!sender) return;
   
-      const reader = BufferReader(packet.content);
       const hitIndex = reader.u8();
       const entityId = reader.string();
   
-      const entity = getPlayerEntityFromController(env.entity, tostring(packet.sender.GetAttribute(gameValues.usersessionid)));
+      const entity = getPlayerEntityFromController(env.entity, tostring(sender.GetAttribute(gameValues.usersessionid)));
       if (!entity || !entity.IsA("GunPlayerEntity")) return;
   
       const targetEntity = env.entity.entities.get(entityId);

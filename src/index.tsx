@@ -4,12 +4,11 @@ import { InitializeCommands } from "cmd";
 import StartControllers from "controllers";
 import { UpdateCameraLoop } from "controllers/CameraController";
 import GameEnvironment from "core/GameEnvironment";
+import { ListenStandardMessage } from "core/NetworkModel";
 import { requireEntities } from "entities";
 import { modulesFolder, uiFolder } from "folders";
 import { gameValues } from "gamevalues";
-import { earlyUpdateLifecycleInstances, lateUpdateLifecycleInstances } from "lifecycle";
 import { RaposoConsole } from "logging";
-import { listenDirectPacket } from "network";
 import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
 import StartSystems from "systems";
 import ChatSystem from "systems/ChatSystem";
@@ -26,8 +25,6 @@ import { DisplayLoadingScreen, HideLoadingScreen } from "UI/loadscreen";
 import { Menu } from "UI/menu";
 import { defaultRoot, uiValues } from "UI/values";
 import { BufferReader } from "util/bufferreader";
-import { getInstanceFromPath } from "util/instancepath";
-
 
 // # Constants & variables
 
@@ -67,25 +64,6 @@ function ExecuteGameModules() {
   }
 }
 
-function BindLifeCycle() {
-  const updateFunction = (dt: number) => {
-    UpdateCameraLoop(dt, GameEnvironment.GetDefaultEnvironment());
-
-    earlyUpdateLifecycleInstances(dt);
-    lateUpdateLifecycleInstances(dt);
-  };
-
-  const lateUpdateFunction = (dt: number) => {
-  };
-
-  if (RunService.IsClient())
-    RunService.PreRender.Connect(dt => updateFunction(dt));
-  else
-    RunService.PreSimulation.Connect(dt => updateFunction(dt));
-
-  RunService.PostSimulation.Connect(dt => lateUpdateFunction(dt));
-}
-
 // # Execution
 if (RunService.IsClient())
   while (!game.IsLoaded()) task.wait();
@@ -110,7 +88,7 @@ _G.Raposo = {
   Environment: {
     Folders: import("folders").expect(),
     Sessions: import("core/GameEnvironment").expect(),
-    Network: import("network").expect(),
+    Network: import("core/NetworkModel").expect(),
     util: {
       BufferReader: BufferReader,
       BufferWriter: import("util/bufferwriter").expect(),
@@ -125,6 +103,22 @@ ExecuteGameModules();
 InitializeCommands();
 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
+  if (RunService.IsClient()) {
+    RunService.BindToRenderStep(`${env.id}_replicationReceive`, 1, dt => env.network.ProcessReceivedPackets());
+    RunService.BindToRenderStep(`${env.id}_tickUpdateConnection`, 2, dt => env.lifecycle.FireTickUpdate(dt));
+    RunService.BindToRenderStep(`${env.id}_updateConnection`, 3, dt => env.lifecycle.FireUpdate(dt));
+    RunService.BindToRenderStep(`${env.id}_lateUpdateConnection`, 999, dt => env.lifecycle.FireLateUpdate(dt));
+  }
+
+  if (RunService.IsServer()) {
+    const connection = RunService.PostSimulation.Connect(dt => {
+      env.network.ProcessReceivedPackets();
+      env.lifecycle.FireTickUpdate(dt);
+    });
+
+    env.BindToClose(() => connection.Disconnect());
+  }
+
   env.lifecycle.BindTickrate((_, dt) => {
     for (const [, ent] of env.entity.entities) {
       const [success, message] = pcall(() => ent.Think(dt));
@@ -132,6 +126,13 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
       RaposoConsole.Error(message);
     }
+  });
+
+  env.BindToClose(() => {
+    RunService.UnbindFromRenderStep(`${env.id}_replicationReceive`);
+    RunService.UnbindFromRenderStep(`${env.id}_tickUpdateConnection`);
+    RunService.UnbindFromRenderStep(`${env.id}_updateConnection`);
+    RunService.UnbindFromRenderStep(`${env.id}_lateUpdateConnection`);
   });
 });
 
@@ -156,10 +157,9 @@ if (RunService.IsServer()) {
 }
 
 if (RunService.IsClient()) {
-  listenDirectPacket(gameValues.cmdnetinfo, (_, bfr) => {
-    const reader = BufferReader(bfr);
-    const message = reader.string();
-  
+  ListenStandardMessage(gameValues.cmdnetinfo, (_, obj) => {
+    const message = tostring(obj.message);
+
     RaposoConsole.Info(message);
     ChatSystem.sendSystemMessage(message);
   });
@@ -237,7 +237,9 @@ if (RunService.IsClient()) {
   }
 }
 
-BindLifeCycle();
+RunService.BindToRenderStep("cameraUpdate", 199, dt => {
+  UpdateCameraLoop(dt, GameEnvironment.GetDefaultEnvironment());
+});
 
 task.spawn(() => {
   DisplayLoadingScreen("Init")

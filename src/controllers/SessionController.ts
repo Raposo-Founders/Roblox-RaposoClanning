@@ -1,11 +1,11 @@
 import { Players, RunService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { ListenStandardMessage, SendStandardMessage } from "core/NetworkModel";
 import { clientSessionConnected, clientSessionDisconnected } from "defaultinsts";
 import { RaposoConsole } from "logging";
-import { listenDirectPacket, sendDirectPacket } from "network";
 import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferBool, writeBufferString, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
+import { finalizeBufferCreation, startBufferCreation, writeBufferString, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
 import Signal from "util/signal";
 
 // # Interfaces & types
@@ -42,9 +42,7 @@ export function clientConnectToServerSession(sessionId: string) {
 
   print("Requesting connection to session:", sessionId);
 
-  startBufferCreation();
-  writeBufferString(sessionId);
-  sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], undefined);
+  SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], { sessionId }, undefined);
 
   const [connectionAllowed, negativeReason] = coroutine.yield() as LuaTuple<[boolean, string]>;
   if (!connectionAllowed) {
@@ -57,9 +55,7 @@ export function clientConnectToServerSession(sessionId: string) {
 
   task.wait(CONNECTION_STEP_COOLDOWN);
 
-  startBufferCreation();
-  writeBufferString(sessionId);
-  sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_MapReady], undefined);
+  SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_MapReady], { sessionId }, undefined);
 
   canConnect = true;
   currentConnectionThread = undefined;
@@ -75,12 +71,12 @@ export function clientCreateLocalSession() {
 
   serverInst.network.remoteEnabled = false;
   const serverSessionConnection = serverInst.network.packetPosted.Connect(packet => {
-    defaultEnvironment.network.insertNetwork(packet);
+    defaultEnvironment.network.InsertPacket(packet, Players.LocalPlayer);
   });
 
   defaultEnvironment.network.remoteEnabled = false;
   const clientSessionConnection = defaultEnvironment.network.packetPosted.Connect(packet => {
-    serverInst.network.insertNetwork(packet);
+    serverInst.network.InsertPacket(packet, undefined);
   });
 
   const connection = DISCONNECT_LOCAL.Connect(() => {
@@ -115,7 +111,7 @@ export function FetchServers() {
   currentServerListFetchThread = coroutine.running();
 
   startBufferCreation();
-  sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_FetchServers], undefined);
+  SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_FetchServers], {}, undefined);
 
   const [serversInfo] = coroutine.yield() as LuaTuple<[ServerListingInfo[]]>;
 
@@ -131,7 +127,7 @@ new ConsoleFunctionCallback(["disconnect", "dc"], [])
     DISCONNECT_LOCAL.Fire();
 
     startBufferCreation();
-    sendDirectPacket("disconnect_request", undefined);
+    SendStandardMessage("disconnect_request", {}, undefined);
   });
 
 new ConsoleFunctionCallback(["connect"], [{ name: "id", type: "string" }])
@@ -148,45 +144,33 @@ new ConsoleFunctionCallback(["connect"], [{ name: "id", type: "string" }])
 
 // Connection requests
 if (RunService.IsServer())
-  listenDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], (sender, bfr) => {
+  ListenStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], (sender, obj) => {
     if (!sender) return;
 
-    const reader = BufferReader(bfr);
-    const sessionId = reader.string();
+    const sessionId = tostring(obj.sessionId);
 
     const targetSession = GameEnvironment.runningInstances.get(sessionId);
 
     if (!targetSession) {
-      startBufferCreation();
-      writeBufferBool(false);
-      writeBufferString(`Unknown session ${sessionId}.`);
-      sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], sender);
-
+      SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: false, message: `Unknown session ${sessionId}` }, sender);
       return;
     }
 
     if (targetSession.blockedPlayers.has(sender.UserId)) {
-      startBufferCreation();
-      writeBufferBool(false);
-      writeBufferString(tostring(targetSession.blockedPlayers.get(sender.UserId)));
-      sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], sender);
+      SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: false, message: tostring(targetSession.blockedPlayers.get(sender.UserId)) }, sender);
 
       return;
     }
 
-    startBufferCreation();
-    writeBufferBool(true);
-    writeBufferString("Allowed.");
-    sendDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], sender);
+    SendStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: true, message: "" }, sender);
 
     usersInConnectionProcess.add(sender);
   });
 
 if (RunService.IsClient())
-  listenDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_Request], (sender, bfr) => {
-    const reader = BufferReader(bfr);
-    const isAllowed = reader.bool();
-    const rejectReason = reader.string();
+  ListenStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_Request], (sender, obj) => {
+    const isAllowed = obj.success ?? false;
+    const rejectReason = tostring(obj.message);
 
     if (!currentConnectionThread)
       return;
@@ -196,11 +180,10 @@ if (RunService.IsClient())
 
 // Finalize connection
 if (RunService.IsServer())
-  listenDirectPacket(SessionConnectionIds[SessionConnectionIds.servercon_MapReady], (sender, bfr) => {
+  ListenStandardMessage(SessionConnectionIds[SessionConnectionIds.servercon_MapReady], (sender, obj) => {
     if (!sender) return;
 
-    const reader = BufferReader(bfr);
-    const sessionId = reader.string();
+    const sessionId = tostring(obj.sessionId);
 
     const targetSession = GameEnvironment.runningInstances.get(sessionId);
     if (!targetSession || !usersInConnectionProcess.has(sender)) return;
@@ -211,9 +194,8 @@ if (RunService.IsServer())
 
 // Handling disconnections
 if (RunService.IsClient())
-  listenDirectPacket("server_disconnected", (_, content) => {
-    const reader = BufferReader(content);
-    const reason = reader.string();
+  ListenStandardMessage("server_disconnected", (_, content) => {
+    const reason = tostring(content.reason);
 
     clientSessionDisconnected.Fire(reason, reason);
 
@@ -223,7 +205,7 @@ if (RunService.IsClient())
   });
 
 if (RunService.IsServer())
-  listenDirectPacket("disconnect_request", (sender) => {
+  ListenStandardMessage("disconnect_request", (sender) => {
     if (!sender) return;
 
     const sessionList = GameEnvironment.GetServersFromPlayer(sender);
@@ -234,7 +216,7 @@ if (RunService.IsServer())
 
 // Fetching server list
 if (RunService.IsServer())
-  listenDirectPacket("game_getservers", (sender, bfr) => {
+  ListenStandardMessage("game_getservers", (sender, bfr) => {
     if (!sender) return;
 
     startBufferCreation();
@@ -246,13 +228,13 @@ if (RunService.IsServer())
       for (const user of inst.players)
         writeBufferU64(user.UserId);
     }
-    sendDirectPacket("game_getservers_reply", sender);
+    SendStandardMessage("game_getservers_reply", { list: finalizeBufferCreation() }, sender);
   });
 
 // Receiving server list
 if (RunService.IsClient())
-  listenDirectPacket("game_getservers_reply", (sender, bfr) => {
-    const reader = BufferReader(bfr);
+  ListenStandardMessage("game_getservers_reply", (sender, obj) => {
+    const reader = BufferReader(obj.list as buffer);
     const serverList: ServerListingInfo[] = [];
     const serversAmount = reader.u8();
 

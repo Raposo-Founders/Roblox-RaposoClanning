@@ -1,12 +1,12 @@
 import { defendersCommandCheck } from "cmd/cmdutils";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString, writeBufferU32 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU32 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_damage";
@@ -16,16 +16,15 @@ const CMD_INDEX_NAME = "cmd_damage";
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket(CMD_INDEX_NAME, info => {
-    if (!info.sender || !info.sender.GetAttribute(gameValues.modattr)) return;
+  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
 
-    const reader = BufferReader(info.content);
     const entityId = reader.string();
     const amount = reader.u32();
 
     let callerEntity: PlayerEntity | undefined;
     for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
-      if (ent.GetUserFromController() !== info.sender) continue;
+      if (ent.GetUserFromController() !== sender) continue;
       callerEntity = ent;
       break;
     }
@@ -33,19 +32,19 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
-      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
+      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
       return;
     }
 
     // Check to see if the sender is just someone with tempmod
     if (!defendersCommandCheck(callerEntity, targetEntity)) {
-      ChatSystem.sendSystemMessage(gameValues.cmdtempmoddefendersdeny, [info.sender]);
+      ChatSystem.sendSystemMessage(gameValues.cmdtempmoddefendersdeny, [sender]);
       return;
     }
 
     targetEntity.takeDamage(amount);
 
-    ChatSystem.sendSystemMessage(`Damaged ${targetEntity.GetUserFromController()} for ${amount} points.`, [info.sender]);
+    ChatSystem.sendSystemMessage(`Damaged ${targetEntity.GetUserFromController()} for ${amount} points.`, [sender]);
   });
 });
 
@@ -61,9 +60,9 @@ new ConsoleFunctionCallback(["damage", "dmg"], [{ name: "player", type: "player"
     }
 
     for (const ent of targetPlayers) {
-      startBufferCreation();
+      const packet = new NetworkPacket(CMD_INDEX_NAME);
       writeBufferString(ent.id);
       writeBufferU32(amount as number);
-      ctx.env.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.SendPacket(packet);
     }
   });

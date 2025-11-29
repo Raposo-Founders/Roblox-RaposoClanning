@@ -1,11 +1,11 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferString } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_tempmod";
@@ -15,15 +15,14 @@ const CMD_INDEX_NAME = "cmd_tempmod";
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.network.listenPacket(CMD_INDEX_NAME, info => {
-    if (!info.sender || !info.sender.GetAttribute(gameValues.adminattr)) return;
+  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
+    if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;
 
-    const reader = BufferReader(info.content);
     const entityId = reader.string();
 
     let callerEntity: PlayerEntity | undefined;
     for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
-      if (ent.GetUserFromController() !== info.sender) continue;
+      if (ent.GetUserFromController() !== sender) continue;
       callerEntity = ent;
       break;
     }
@@ -31,13 +30,13 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
-      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [info.sender]);
+      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
       return;
     }
 
     const controller = targetEntity.GetUserFromController();
     if (!controller) {
-      ChatSystem.sendSystemMessage(`PlayerEntity ${targetEntity.id} has no controller.`, [info.sender]);
+      ChatSystem.sendSystemMessage(`PlayerEntity ${targetEntity.id} has no controller.`, [sender]);
       return;
     }
 
@@ -58,8 +57,8 @@ new ConsoleFunctionCallback(["tempmod"], [{ name: "player", type: "player" }])
     }
 
     for (const ent of targetPlayers) {
-      startBufferCreation();
+      const packet = new NetworkPacket(CMD_INDEX_NAME);
       writeBufferString(ent.id);
-      ctx.env.network.sendPacket(CMD_INDEX_NAME);
+      ctx.env.network.SendPacket(packet);
     }
   });

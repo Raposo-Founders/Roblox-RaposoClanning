@@ -1,12 +1,13 @@
 import * as Services from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
+import { NetworkPacket } from "core/NetworkModel";
 import { RaposoConsole } from "logging";
 import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
 import { PlayermodelRig } from "providers/PlayermodelProvider/rig";
 import { MapContent, ObjectsFolder } from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferF32, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferF32, writeBufferU8 } from "util/bufferwriter";
 import { UTIL_TraceLine } from "util/traceline";
 import { generateTracelineParameters } from "util/traceparam";
 import { registerEntityClass } from ".";
@@ -170,23 +171,24 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.lifecycle.BindTickrate(() => {
     const entitiesList = env.entity.getEntitiesThatIsA("GunPlayerEntity");
 
-    startBufferCreation();
+    const packet = new NetworkPacket(`${NETWORK_ID}replication`);
+
     writeBufferU8(math.min(entitiesList.size(), 255)); // Yes... I know this limits only up to 255 entities, dickhead.
     for (const ent of entitiesList)
       ent.WriteStateBuffer();
-    env.network.sendPacket(`${NETWORK_ID}replication`);
+
+    env.network.SendPacket(packet);
   });
 
   // Client state updating
-  env.network.listenPacket(`${NETWORK_ID}c_stateupd`, (packet) => {
-    if (!packet.sender) return;
+  env.network.ListenPacket(`${NETWORK_ID}c_stateupd`, (sender, reader) => {
+    if (!sender) return;
 
-    const reader = BufferReader(packet.content);
     const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
 
     const entity = env.entity.entities.get(entityId);
-    if (!entity || !entity.IsA("GunPlayerEntity") || entity.GetUserFromController() !== packet.sender) {
-      RaposoConsole.Warn(`Invalid ${GunPlayerEntity} state update from ${packet.sender}.`);
+    if (!entity || !entity.IsA("GunPlayerEntity") || entity.GetUserFromController() !== sender) {
+      RaposoConsole.Warn(`Invalid ${GunPlayerEntity} state update from ${sender}.`);
       return;
     }
 
@@ -201,13 +203,12 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   let hasEntityInQueue = false;
 
   // Entity replication
-  env.network.listenPacket(`${NETWORK_ID}replication`, (packet) => {
+  env.network.ListenPacket(`${NETWORK_ID}replication`, (sender, reader) => {
     if (hasEntityInQueue) return; // Skip if entities are currently being created.
     // ! MIGHT RESULT IN THE GAME HANGING FROM TIME TO TIME !
 
     const listedServerEntities = new Set<EntityId>();
 
-    const reader = BufferReader(packet.content);
     const amount = reader.u8();
 
     for (let i = 0; i < amount; i++) {
@@ -237,8 +238,8 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     const entity = getLocalPlayerEntity(env);
     if (!entity || !entity.IsA("GunPlayerEntity") || entity.health <= 0) return;
 
-    startBufferCreation();
+    const packet = new NetworkPacket(`${NETWORK_ID}c_stateupd`);
     entity.WriteStateBuffer();
-    env.network.sendPacket(`${NETWORK_ID}c_stateupd`, undefined, undefined);
+    env.network.SendPacket(packet);
   });
 });

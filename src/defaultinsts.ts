@@ -1,5 +1,3 @@
-import { RunService } from "@rbxts/services";
-import GameEnvironment from "./core/GameEnvironment";
 import Signal from "./util/signal";
 
 // # Constants & variables

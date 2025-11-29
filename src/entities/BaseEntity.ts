@@ -1,6 +1,5 @@
 import { BufferReader } from "util/bufferreader";
 import { BufferByteType } from "util/bufferwriter";
-import Signal from "util/signal";
 import { ErrorObject } from "util/utilfuncs";
 
 declare global {
@@ -8,8 +7,6 @@ declare global {
     BaseEntity: typeof BaseEntity;
   }
 }
-
-type EntityVariableSpecialHandler<T> = (lastState: T | undefined) => void;
 
 abstract class BaseEntity {
   readonly id = ErrorObject<string>("Entity id cannot be accessed during contruction.");
@@ -22,15 +19,14 @@ abstract class BaseEntity {
   readonly associatedInstances = new Set<Instance>();
   readonly attributesList = new Map<string, unknown>();
 
-  readonly onReplicationReceived = new Signal();
-  readonly networkableProperties = new Map<string, BufferByteType | EntityVariableSpecialHandler<never>>();
+  private networkableProperties = new Map<string, BufferByteType>();
 
   constructor() {
     this.inheritanceList.add("BaseEntity");
   }
 
-  RegisterNetworkableProperty<T extends keyof this>(variableName: T, byteType: BufferByteType | EntityVariableSpecialHandler<this[T]>) {
-    this.networkableProperties.set(variableName as string, byteType);
+  protected RegisterNetworkableProperty<T extends keyof this>(variableName: T, byteType: BufferByteType) {
+    this.networkableProperties.set(tostring(variableName), byteType);
   }
 
   IsA<C extends keyof GameEntities>(classname: C): this is EntityType<C> {
@@ -63,6 +59,19 @@ abstract class BaseEntity {
 
   GetAttribute(name: string) {
     return this.attributesList.get(name);
+  }
+
+  GetNetworkSnapshot() {
+    const valuesContent = new Map<string, { value: unknown, valueType: BufferByteType }>();
+
+    for (const [name, btype] of this.networkableProperties) {
+      const value = this[name as keyof this];
+      if (value === undefined) continue;
+
+      valuesContent.set(name, { value, valueType: btype });
+    }
+
+    return valuesContent;
   }
 
   abstract Destroy(): void;
