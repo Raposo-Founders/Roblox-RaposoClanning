@@ -2,7 +2,8 @@ import { Players } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
 import { NetworkPacket } from "core/NetworkModel";
 
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import PlayerEntity from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";

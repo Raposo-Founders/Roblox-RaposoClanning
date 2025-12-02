@@ -1,7 +1,7 @@
 import React from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { Players, RunService } from "@rbxts/services";
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 
 export const defaultScreenGui = new Instance("ScreenGui");
 defaultScreenGui.Name = "React Default";

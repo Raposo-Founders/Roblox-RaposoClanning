@@ -1,6 +1,6 @@
 import { Players, TweenService } from "@rbxts/services";
 import { modelsFolder } from "folders";
-import { gameValues } from "gamevalues";
+import { gameValues, PlayerTeam } from "gamevalues";
 import WorldProvider from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
 import { writeBufferBool, writeBufferString, writeBufferU16, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
@@ -8,6 +8,10 @@ import Signal from "util/signal";
 import { EntityManager, registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
 import { DoesInstanceExist } from "util/utilfuncs";
+import { CharacterAnimationManager, PlayermodelRigManager } from "providers/PlayermodelRigManager";
+import { colorTable } from "UI/values";
+import { createHealthBarForEntity } from "providers/healthbar";
+import { RaposoConsole } from "logging";
 
 // # Types
 declare global {
@@ -16,23 +20,40 @@ declare global {
   }
 }
 
-interface PlayerEntityHumanoidModel extends Model {
-  Humanoid: Humanoid;
-  HumanoidRootPart: Part;
-}
-
 // # Constants & variables
-export enum PlayerTeam {
-  Defenders,
-  Raiders,
-  Spectators,
-}
-
 const activePlayermodelTweens = new Map<string, Tween>();
 
 const positionDifferenceThreshold = 3;
+const humanoidFetchDescriptionMaxAttempts = 5;
 
 // # Functions
+export async function fetchHumanoidDescription(userid: number) {
+  userid = math.max(userid, 1);
+
+  let description: HumanoidDescription | undefined;
+  let totalAttempts = 0;
+
+  while (description === undefined) {
+    totalAttempts++;
+    if (totalAttempts >= humanoidFetchDescriptionMaxAttempts) {
+      RaposoConsole.Warn(`Failed to fetch HumanoidDescription ${userid} after ${humanoidFetchDescriptionMaxAttempts} attempts.`);
+      break;
+    }
+
+    const [success, obj] = pcall(() => Players.GetHumanoidDescriptionFromUserId(math.max(userid, 1)));
+    if (!success) {
+      RaposoConsole.Warn(`Failed to fetch HumanoidDescription, retrying in 5 seconds...\n${obj}`);
+      task.wait(5);
+      continue;
+    }
+
+    description = obj;
+    break;
+  }
+
+  return description;
+}
+
 export function getPlayerEntityFromController(environment: EntityManager, controller: string) {
   for (const ent of environment.getEntitiesThatIsA("PlayerEntity"))
     if (ent.controller === controller)
@@ -54,7 +75,8 @@ export default class PlayerEntity extends HealthEntity {
   grounded = false;
   anchored = false;
 
-  humanoidModel: PlayerEntityHumanoidModel | undefined;
+  humanoidModel: CharacterModel | undefined;
+  animator: CharacterAnimationManager | undefined;
 
   team = PlayerTeam.Spectators;
   networkOwner = ""; // For BOT entities
@@ -79,24 +101,130 @@ export default class PlayerEntity extends HealthEntity {
     this.OnSetupFinished(() => {
       if (this.environment.isServer) return;
 
-      const humanoidModel = modelsFolder.WaitForChild("PlayerEntityHumanoidRig", 1)?.Clone() as PlayerEntityHumanoidModel | undefined;
+      const humanoidModel = modelsFolder.WaitForChild("PlayerEntityHumanoidRig", 1)?.Clone() as CharacterModel | undefined;
       assert(humanoidModel, `No PlayerEntityHumanoidRig has been found on the models folder.`);
+
+      humanoidModel.WaitForChild("HumanoidRootPart");
+      humanoidModel.WaitForChild("Humanoid");
+      humanoidModel.Humanoid.WaitForChild("Animator");
+      humanoidModel.WaitForChild("Torso");
 
       humanoidModel.Name = this.id;
       humanoidModel.Parent = WorldProvider.ObjectsFolder;
+      humanoidModel.Humanoid.Health = 1;
+      humanoidModel.Humanoid.MaxHealth = 1;
+      humanoidModel.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+      humanoidModel.Humanoid.HealthDisplayDistance = 0;
+      humanoidModel.Humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff;
       humanoidModel.Humanoid.SetStateEnabled("PlatformStanding", false);
       humanoidModel.Humanoid.SetStateEnabled("Ragdoll", false);
+      humanoidModel.Humanoid.SetStateEnabled("Physics", false);
       humanoidModel.Humanoid.SetStateEnabled("Dead", false);
       humanoidModel.Humanoid.BreakJointsOnDeath = false;
 
+      this.AssociateInstance(humanoidModel);
+
+      const refreshAppearance = () => {
+        const controller = this.GetUserFromController() || this.GetUserFromNetworkOwner();
+        if (!controller) return;
+
+        fetchHumanoidDescription(controller.UserId).andThen(val => {
+          if (!val) return;
+          this.humanoidModel?.Humanoid.ApplyDescription(val);
+        });
+      };
+
+      const rigManager = new PlayermodelRigManager(humanoidModel);
+
+      const unbindConnection1 = this.environment.lifecycle.BindLateUpdate(() => {
+        const rootPart = humanoidModel?.HumanoidRootPart;
+        const isLocalEntity = this.GetUserFromController() === Players.LocalPlayer;
+
+        rigManager.animator.velocity = rootPart.AssemblyLinearVelocity || Vector3.zero;
+        rigManager.animator.is_grounded = this.grounded;
+        rigManager.animator.Update();
+
+        // Update highlight
+        let fillColor = colorTable.spectatorsColor;
+        if (this.team === PlayerTeam.Defenders) fillColor = colorTable.defendersColor;
+        if (this.team === PlayerTeam.Raiders) fillColor = colorTable.raidersColor;
+
+        rigManager.highlight.Enabled = true;
+        rigManager.highlight.OutlineColor = Color3.fromHex(fillColor);
+        rigManager.highlight.DepthMode = isLocalEntity ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
+
+        if (!isLocalEntity) {
+          let localEntity: PlayerEntity | undefined;
+
+          for (const ent of this.environment.entity.getEntitiesThatIsA("PlayerEntity")) {
+            if (ent === this) continue;
+            if (ent.GetUserFromController() !== Players.LocalPlayer) continue;
+            localEntity = ent;
+            break;
+          }
+
+          if (localEntity)
+            rigManager.highlight.DepthMode = this.team === localEntity.team ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
+        }
+      });
+
+      for (const inst of humanoidModel.GetDescendants()) {
+        if (inst.ClassName.match("Script")[0]) {
+          inst.Destroy();
+          continue;
+        }
+
+        if (inst.IsA("BasePart")) {
+          inst.CollisionGroup = "Playermodel";
+          inst.SetAttribute("OG_MATERIAL", inst.Material.Name);
+
+          continue;
+        }
+      }
+
       this.OnDelete(() => {
+        unbindConnection1();
+
         humanoidModel.Destroy();
         rawset(this, "humanoidModel", undefined);
       });
-
       rawset(this, "humanoidModel", humanoidModel);
+
+      this.died.Connect(() => {
+        rigManager.SetMaterial();
+        rigManager.SetTransparency();
+        rigManager.SetJointsEnabled(false);
+
+        for (const inst of humanoidModel.GetChildren()) {
+          if (!inst.IsA("BasePart")) continue;
+
+          inst.AssemblyLinearVelocity = this.velocity;
+          inst.AssemblyAngularVelocity = this.velocity;
+        }
+      });
+
+      this.spawned.Connect(() => {
+        rigManager.SetMaterial();
+        rigManager.SetTransparency();
+        rigManager.SetJointsEnabled(true);
+
+        for (const inst of humanoidModel.GetChildren()) {
+          if (!inst.IsA("BasePart")) continue;
+
+          inst.AssemblyLinearVelocity = new Vector3();
+          inst.AssemblyAngularVelocity = new Vector3();
+        }
+
+        refreshAppearance();
+      });
+
+      refreshAppearance();
+      createHealthBarForEntity(this, humanoidModel.HumanoidRootPart);
+      this.animator = rigManager.animator;
     });
   }
+
+  Think(dt: number): void { }
 
   GetUserFromController() {
     if (this.controller === "") return;
@@ -254,10 +382,6 @@ export default class PlayerEntity extends HealthEntity {
         tween.Play();
       }
     }
-  }
-
-  Think(dt: number): void {
-      
   }
 
   Spawn(origin?: CFrame) {

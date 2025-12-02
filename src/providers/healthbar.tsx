@@ -3,7 +3,8 @@ import React from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { Players, RunService, TweenService } from "@rbxts/services";
 
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import PlayerEntity from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { colorTable } from "UI/values";
 
 // # Types & interfaces

@@ -3,8 +3,7 @@ import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
 import { NetworkPacket } from "core/NetworkModel";
 import { RaposoConsole } from "logging";
-import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
-import { PlayermodelRig } from "providers/PlayermodelProvider/rig";
+import { PlayermodelRigManager } from "providers/PlayermodelRigManager";
 import { MapContent, ObjectsFolder } from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
 import { writeBufferF32, writeBufferU8 } from "util/bufferwriter";
@@ -41,7 +40,7 @@ export class GunPlayerEntity extends PlayerEntity {
   private lastShotTime = 0;
   private weaponDelay = -1;
 
-  private playermodel: PlayermodelRig | undefined;
+  private playermodel: PlayermodelRigManager | undefined;
 
   constructor(public controller: string, public appearanceId = 1) {
     super(controller, appearanceId);
@@ -51,10 +50,10 @@ export class GunPlayerEntity extends PlayerEntity {
     this.OnSetupFinished(() => {
       if (this.environment.isServer) return;
 
-      this.playermodel = createPlayermodelForEntity(this);
+      while (!this.humanoidModel) task.wait();
 
       const shootAttachment = new Instance("Attachment");
-      shootAttachment.Parent = this.playermodel.rig["Right Arm"];
+      shootAttachment.Parent = this.humanoidModel["Right Arm"];
       shootAttachment.Name = "WEP_SHOOT_ATTACH";
     });
   }

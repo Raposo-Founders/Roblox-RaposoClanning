@@ -2,7 +2,7 @@ import React, { createRef } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 import { UserInputService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { colorTable } from "UI/values";
 
 // # Constants & Variables

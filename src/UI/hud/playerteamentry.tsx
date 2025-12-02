@@ -1,7 +1,7 @@
 import React, { useEffect } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { getPlayersFromTeam } from "controllers/PlayerController";
 import countryFlags from "UI/countries";
 import { colorTable, uiValues } from "UI/values";

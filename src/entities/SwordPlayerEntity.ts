@@ -4,7 +4,6 @@ import GameEnvironment from "core/GameEnvironment";
 import { NetworkPacket } from "core/NetworkModel";
 import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
-import { getPlayermodelFromEntity } from "providers/PlayermodelProvider";
 import { BufferReader } from "util/bufferreader";
 import { startBufferCreation, writeBufferBool, writeBufferString, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
 import Signal from "util/signal";
@@ -97,14 +96,14 @@ export class SwordPlayerEntity extends PlayerEntity {
     if (this.isEquipped) return;
 
     this.isEquipped = true;
-    getPlayermodelFromEntity(this.id)?.animator.PlayAnimation("toolnone", "Action", true);
+    this.animator?.PlayAnimation("toolnone", "Action", true);
   }
 
   Unequip() {
     if (!this.isEquipped) return;
 
     this.isEquipped = false;
-    getPlayermodelFromEntity(this.id)?.animator.StopAnimation("toolnone");
+    this.animator?.StopAnimation("toolnone");
   }
 
   async Attack1() {
@@ -135,8 +134,8 @@ export class SwordPlayerEntity extends PlayerEntity {
 
   async Lunge() {
     if (!this.isEquipped) return;
-    getPlayermodelFromEntity(this.id)?.animator.PlayAnimation("toollunge", "Action3", true);
-    getPlayermodelFromEntity(this.id)?.animator.StopAnimation("toolslash");
+    this.animator?.PlayAnimation("toollunge", "Action3", true);
+    this.animator?.StopAnimation("toolslash");
 
     this.currentState = SwordState.Lunge;
     this.stateChanged.Fire(this.currentState);
@@ -145,13 +144,13 @@ export class SwordPlayerEntity extends PlayerEntity {
 
     this.currentState = SwordState.Idle;
     this.stateChanged.Fire(this.currentState);
-    getPlayermodelFromEntity(this.id)?.animator.StopAnimation("toollunge");
+    this.animator?.StopAnimation("toollunge");
   }
 
   async Swing() {
     if (!this.isEquipped) return;
-    getPlayermodelFromEntity(this.id)?.animator.StopAnimation("toollunge");
-    getPlayermodelFromEntity(this.id)?.animator.PlayAnimation("toolslash", "Action2", true);
+    this.animator?.StopAnimation("toollunge");
+    this.animator?.PlayAnimation("toolslash", "Action2", true);
 
     this.currentState = SwordState.Swing;
     this.stateChanged.Fire(this.currentState);

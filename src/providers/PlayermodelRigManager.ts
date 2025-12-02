@@ -32,54 +32,12 @@ const defaultDescription = new Instance("HumanoidDescription");
 // # Functions
 
 // # Class
-export class PlayermodelRig {
-  readonly rig: CharacterModel;
+export class PlayermodelRigManager {
   animator: CharacterAnimationManager;
-
-  humanoidRootPart: Part;
-  humanoid: Humanoid;
-
   highlight = new Instance("Highlight");
 
-  constructor() {
+  constructor(readonly rig: CharacterModel) {
     assert(Services.RunService.IsClient(), "Class can only be used on the client.");
-
-    this.rig = Services.Players.CreateHumanoidModelFromDescription(defaultDescription, "R6") as CharacterModel;
-
-    // Make sure that everything fucking exists
-    this.humanoidRootPart = this.rig.WaitForChild("HumanoidRootPart") as Part;
-    this.humanoid = this.rig.WaitForChild("Humanoid") as Humanoid;
-    this.rig.WaitForChild("Torso");
-
-    this.rig.Name = "Playermodel";
-    this.rig.PrimaryPart = this.rig.HumanoidRootPart;
-    this.humanoid.Health = 1;
-    this.humanoid.MaxHealth = 1;
-    this.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-    this.humanoid.HealthDisplayDistance = 0;
-    this.humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff;
-    this.humanoid.SetStateEnabled("Dead", false);
-    this.humanoid.BreakJointsOnDeath = false;
-    // this.rig.HumanoidRootPart.Anchored = true;
-    this.rig.PivotTo(new CFrame(0, 100, 0));
-    this.rig.Parent = WorldProvider.ObjectsFolder;
-
-    this.highlight.Parent = this.rig;
-    this.highlight.FillTransparency = 1;
-    this.highlight.OutlineColor = Color3.fromHex(colorTable.spectatorsColor);
-    this.highlight.OutlineTransparency = 0.75;
-    this.highlight.DepthMode = Enum.HighlightDepthMode.Occluded;
-
-    for (const inst of this.rig.GetDescendants()) {
-      if (inst.IsA("LocalScript") || inst.IsA("ModuleScript")) {
-        inst.Destroy();
-        continue;
-      }
-
-      if (!inst.IsA("BasePart")) continue;
-      inst.CollisionGroup = "Playermodel";
-      inst.SetAttribute("OG_MATERIAL", inst.Material.Name);
-    }
 
     this.animator = new CharacterAnimationManager(this.rig.Humanoid.WaitForChild("Animator") as Animator);
   }
@@ -126,7 +84,7 @@ export class PlayermodelRig {
   }
 }
 
-class CharacterAnimationManager {
+export class CharacterAnimationManager {
   private _instances_list = new Array<Instance>();
   private _connections_list = new Array<RBXScriptConnection>();
   private _loaded_anims = new Map<string, AnimationTrack>();

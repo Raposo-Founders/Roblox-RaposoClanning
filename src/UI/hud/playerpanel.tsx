@@ -4,7 +4,7 @@ import { Players } from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
 import { cacheFolder } from "folders";
-import { PlayermodelRig } from "providers/PlayermodelProvider/rig";
+import { PlayermodelRigManager } from "providers/PlayermodelRigManager";
 import { uiValues } from "UI/values";
 
 const defaultDescription = new Instance("HumanoidDescription");
@@ -39,15 +39,15 @@ export function HudPlayerPanel() {
     if (!viewportReference.current) return;
 
     let currentEntity = "";
-    let currentModel: PlayermodelRig | undefined;
+    let currentModel: PlayermodelRigManager | undefined;
 
     viewportReference.current.CurrentCamera = cameraReference.current;
 
     GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
       let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(currentEntity);
-      if (!playerEntity || !playerEntity.IsA("PlayerEntity")) {
+      if (!playerEntity || !playerEntity.IsA("PlayerEntity") || !playerEntity.humanoidModel) {
         playerEntity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
-        if (!playerEntity || !playerEntity.IsA("PlayerEntity")) return;
+        if (!playerEntity || !playerEntity.IsA("PlayerEntity") || !playerEntity.humanoidModel) return;
       }
 
       // Means that this is the first time that it gets set
@@ -65,7 +65,7 @@ export function HudPlayerPanel() {
         currentModel?.Destroy();
         currentModel = undefined;
 
-        currentModel = new PlayermodelRig();
+        currentModel = new PlayermodelRigManager(playerEntity.humanoidModel);
         currentModel.rig.Parent = worldReference.current;
         currentModel.PivotTo(new CFrame());
         currentModel.animator.is_grounded = true;

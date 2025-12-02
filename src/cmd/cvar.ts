@@ -1,6 +1,7 @@
 import { Players } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import PlayerEntity from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import Signal from "util/signal";
 
 // # Types

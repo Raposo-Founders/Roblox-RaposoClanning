@@ -197,10 +197,17 @@ export class EntityManager {
     const list: BaseEntity[] = [];
 
     for (const [, ent] of this.entities) {
-      if (!ent.associatedInstances.has(inst))
+      if (ent.associatedInstances.has(inst)) {
+        list.push(ent);
         continue;
+      }
 
-      list.push(ent);
+      for (const associatedInstance of ent.associatedInstances) {
+        if (!inst.IsDescendantOf(associatedInstance)) continue;
+
+        list.push(ent);
+        break;
+      }
     }
 
     return list;

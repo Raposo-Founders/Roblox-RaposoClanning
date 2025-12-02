@@ -1,7 +1,7 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
 import { NetworkPacket } from "core/NetworkModel";
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
 import { GetGroupInfo } from "providers/GroupsProvider";
 import WorldProvider from "providers/WorldProvider";

@@ -1,23 +1,29 @@
 import ColorUtils from "@rbxts/colour-utils";
-import { Players, TweenService } from "@rbxts/services";
+import { Players, RunService, TweenService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
 import { NetworkDataStreamer, NetworkPacket } from "core/NetworkModel";
 import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import { modelsFolder } from "folders";
 import { getInstanceDefinedValue } from "gamevalues";
-import { createPlayermodelForEntity } from "providers/PlayermodelProvider";
+import { RaposoConsole } from "logging";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
 import { writeBufferString, writeBufferU8 } from "util/bufferwriter";
+import { generateTracelineParameters } from "util/traceparam";
 import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Constants & variables
 const NETWORK_ID = "swordcon_";
 const SWORD_MODEL = modelsFolder.WaitForChild("Sword") as BasePart;
+
+const trackingEntityHits = new Map<string, Set<BasePart>>();
+const swordSize = new Vector3(1, 0.8, 4);
+const swordGripOffset = new CFrame(0, -1, -1.5).mul(CFrame.Angles(0, math.rad(180), math.rad(-90)));
+const swordLungeOffset = new CFrame(-1.5, 0, -1.5).mul(CFrame.Angles(0, -math.rad(90), 0));
 
 const forcetieEnabled = getInstanceDefinedValue("ForcetieEnabled", false);
 const teamHealingEnabled = getInstanceDefinedValue("TeamHealingEnabled", false);
@@ -111,6 +117,40 @@ function ClientHandleHitboxTouched(attacker: SwordPlayerEntity, target: HealthEn
     spawnHitHighlight(targetColor);
 }
 
+function GetPartsInSwordHitbox(entity: SwordPlayerEntity, rightArmCFrame: CFrame) {
+  const params = generateTracelineParameters(true, [ObjectsFolder], [], entity.environment.entity, ["HealthEntity"], [], false);
+  const offsetCframe = entity.currentState !== SwordState.Lunge ? swordGripOffset : swordGripOffset.mul(swordLungeOffset.Inverse());
+  const hitboxCFrame = rightArmCFrame.mul(offsetCframe);
+
+  const partsList = workspace.GetPartBoundsInBox(hitboxCFrame, swordSize, params);
+  const filteredList: BasePart[] = [];
+
+  for (const part of partsList) {
+    const associatedEntities = entity.environment.entity.getEntitiesFromInstance(part);
+    if (associatedEntities.size() <= 0 || associatedEntities.includes(entity)) continue;
+
+    filteredList.push(part);
+  }
+
+  const visualIndicator = new Instance("BoxHandleAdornment");
+  visualIndicator.Adornee = workspace;
+  visualIndicator.CFrame = hitboxCFrame;
+  visualIndicator.Size = swordSize;
+  visualIndicator.Transparency = 0.75;
+  visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 1, 1) : new Color3(0, 1, 1);
+  visualIndicator.Parent = workspace;
+
+  if (filteredList.size() > 0)
+    visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 0.75, 0) : new Color3(1, 0, 0);
+
+  task.defer(() => {
+    RunService.Heartbeat.Wait();
+    visualIndicator.Destroy();
+  });
+
+  return filteredList;
+}
+
 // # Bindings & misc
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
@@ -159,18 +199,11 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.entity.entityCreated.Connect(ent => {
     if (!ent.IsA("SwordPlayerEntity")) return;
 
+    while (!ent.humanoidModel) task.wait();
+
     const lastEntitiesHitTime = new Map<string, number>();
 
-    const playermodel = createPlayermodelForEntity(ent);
-
-    const getGripPosition = () => {
-      let gripPosition = new CFrame();
-
-      if (ent.currentState === SwordState.Lunge)
-        gripPosition = new CFrame(-1.5, 0, -1.5).mul(CFrame.Angles(0, -math.rad(90), 0));
-
-      return gripPosition;
-    };
+    const getGripPosition = () => ent.currentState === SwordState.Lunge ? swordLungeOffset : new CFrame();
 
     const swordModel = SWORD_MODEL.Clone();
     swordModel.Parent = workspace;
@@ -178,7 +211,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const swordMotor = new Instance("Motor6D");
     swordMotor.Parent = swordModel;
-    swordMotor.Part0 = playermodel.rig["Right Arm"];
+    swordMotor.Part0 = ent.humanoidModel["Right Arm"];
     swordMotor.Part1 = swordModel;
     swordMotor.C0 = new CFrame(0, -1, -1.5).mul(CFrame.Angles(0, math.rad(180), math.rad(-90)));
 
@@ -196,12 +229,12 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     lungeSound.SetParent(soundAttachment);
     lungeSound.clearOnFinish = false;
 
-    const touchedConnection = swordModel.Touched.Connect(other => {
+    const touchedHandler = (other: BasePart) => {
       if (env.isPlayback) return;
       if (!ent.IsWeaponEquipped()) return;
-      if (!DoesInstanceExist(playermodel.rig)) return;
+      if (!DoesInstanceExist(ent.humanoidModel)) return;
       if (other.IsDescendantOf(WorldProvider.MapFolder)) return;
-      if (other.IsDescendantOf(playermodel.rig)) return; // Hitting ourselves, ignore...
+      if (other.IsDescendantOf(ent.humanoidModel)) return; // Hitting ourselves, ignore...
 
       const relatedEntities = env.entity.getEntitiesFromInstance(other);
       if (relatedEntities.size() <= 0) return;
@@ -215,7 +248,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
         ClientHandleHitboxTouched(ent, entity, other, env.network);
       }
-    });
+    };
 
     ent.stateChanged.Connect(state => {
       if (state === SwordState.Idle) return;
@@ -226,17 +259,41 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
         swingSound.Play();
     });
 
-    const unbindLifecycleUpdate1 = env.lifecycle.BindTickrate(() => {
+    const unbindLifecycleUpdate1 = env.lifecycle.BindLateUpdate(() => {
+      if (!ent.humanoidModel || !DoesInstanceExist(ent.humanoidModel)) return;
+
       const isEquipped = ent.health > 0 && ent.IsWeaponEquipped();
 
       swordMotor.C1 = getGripPosition();
       swordModel.Transparency = isEquipped ? 0 : 1;
+
+      // scan for hits
+      const existingHits = trackingEntityHits.get(ent.id) ?? new Set();
+      const partsInHitbox = GetPartsInSwordHitbox(ent, ent.humanoidModel["Right Arm"].CFrame);
+      const newHits = new Set<BasePart>();
+
+      for (const part of partsInHitbox) {
+        if (existingHits.has(part)) continue;
+        existingHits.add(part);
+        newHits.add(part);
+        RaposoConsole.Info(part.GetFullName());
+      }
+
+      for (const oldHits of existingHits) {
+        if (partsInHitbox.includes(oldHits)) continue;
+        existingHits.delete(oldHits);
+      }
+
+      if (!trackingEntityHits.has(ent.id))
+        trackingEntityHits.set(ent.id, existingHits);
+
+      for (const hit of newHits)
+        touchedHandler(hit);
     });
 
     ent.OnDelete(() => {
       swordModel.Destroy();
       swordMotor.Destroy();
-      touchedConnection.Disconnect();
 
       unbindLifecycleUpdate1();
     });

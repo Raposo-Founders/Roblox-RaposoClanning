@@ -5,7 +5,8 @@ import { NetworkDataStreamer } from "core/NetworkModel";
 import BaseEntity from "entities/BaseEntity";
 import { GunPlayerEntity } from "entities/GunPlayerEntity";
 import HealthEntity from "entities/HealthEntity";
-import { getPlayerEntityFromController, PlayerTeam } from "entities/PlayerEntity";
+import { getPlayerEntityFromController } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { gameValues, getInstanceDefinedValue } from "gamevalues";
 import { ObjectsFolder } from "providers/WorldProvider";
 

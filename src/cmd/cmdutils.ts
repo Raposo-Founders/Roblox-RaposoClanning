@@ -1,4 +1,5 @@
-import PlayerEntity, { PlayerTeam } from "entities/PlayerEntity";
+import PlayerEntity from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
 
 export function defendersCommandCheck(callerEntity: PlayerEntity, targetEntity: PlayerEntity) {

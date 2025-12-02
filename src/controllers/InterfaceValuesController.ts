@@ -1,7 +1,7 @@
 import { RunService, UserInputService } from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
-import { PlayerTeam } from "entities/PlayerEntity";
+import { PlayerTeam } from "gamevalues";
 import { menuTabActivated } from "UI/menu/menuprefabs";
 import { colorTable, uiValues } from "UI/values";
 

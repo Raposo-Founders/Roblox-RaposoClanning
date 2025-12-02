@@ -51,3 +51,9 @@ export function getInstanceDefinedValue<T extends AttributeValue>(name: string, 
 
   return targetValue as T;
 }
+
+export enum PlayerTeam {
+  Defenders,
+  Raiders,
+  Spectators
+}
