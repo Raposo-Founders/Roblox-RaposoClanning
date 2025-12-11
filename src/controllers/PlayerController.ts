@@ -22,7 +22,7 @@ const ADMIN_ROLES: string[] = [
 
 // # Functions
 function formatEntityId(userId: number) {
-  return string.format("PlayerEnt_%i", userId);
+  return string.format("PlayerEntity_%i", userId);
 }
 
 export function getPlayersFromTeam(environment: T_EntityEnvironment, team: PlayerTeam) {
@@ -46,11 +46,14 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const listedInfo = ClanwareCaseSystem.IsUserListed(user.UserId);
 
-    env.entity.createEntity("SwordPlayerEntity", formatEntityId(user.UserId), referenceId, user.UserId).andThen(ent => {
+    env.entity.createEntity("SwordPlayerEntity", formatEntityId(user.UserId)).andThen(ent => {
+      ent.controller = referenceId;
+      ent.appearanceId = user.UserId;
+
       ent.died.Connect(attacker => {
 
         if (attacker?.IsA("PlayerEntity")) {
-          const distance = ent.origin.Position.sub(attacker.origin.Position).Magnitude;
+          const distance = ent.position.sub(attacker.position).Magnitude;
 
           const packet = new NetworkPacket("game_killfeed");
           writeBufferF32(distance);

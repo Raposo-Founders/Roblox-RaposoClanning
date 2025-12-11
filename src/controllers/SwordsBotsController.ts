@@ -8,6 +8,7 @@ import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";
 import { DoesInstanceExist } from "util/utilfuncs";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Types
 interface BotAdvanceSuggestionResult {
@@ -40,8 +41,8 @@ function SearchTargetEntity(environment: T_EntityEnvironment, caller: PlayerEnti
       continue;
 
     // Compare the distance between the target and the caller
-    const currentDistance = caller.origin.Position.sub(currentTarget.origin.Position).Magnitude;
-    const entityDistance = caller.origin.Position.sub(ent.origin.Position).Magnitude;
+    const currentDistance = caller.position.sub(currentTarget.position).Magnitude;
+    const entityDistance = caller.position.sub(ent.position).Magnitude;
 
     if (currentDistance < entityDistance) continue;
     currentTarget = ent;
@@ -75,7 +76,7 @@ function ShouldAdvance(entity: SwordPlayerEntity, target: PlayerEntity) {
   if (!target.IsA("SwordPlayerEntity")) return finalResult;
 
   const currentPosition = entity.humanoidModel.GetPivot().Position.mul(new Vector3(1, 0, 1));
-  const targetPosition = target.origin.Position.mul(new Vector3(1, 0, 1));
+  const targetPosition = target.position.mul(new Vector3(1, 0, 1));
   const direction = new CFrame(currentPosition, targetPosition).LookVector;
   const inverseDirection = new CFrame(targetPosition, currentPosition).LookVector;
   const distance = currentPosition.sub(targetPosition).Magnitude;
@@ -129,7 +130,7 @@ function CalculateMovement(entity: SwordPlayerEntity, target: WorldEntity) {
   if (!DoesInstanceExist(entity.humanoidModel)) return;
 
   const currentPosition = entity.humanoidModel.GetPivot().Position.mul(new Vector3(1, 0, 1));
-  const targetPosition = target.origin.Position.mul(new Vector3(1, 0, 1));
+  const targetPosition = target.position.mul(new Vector3(1, 0, 1));
   const direction = new CFrame(currentPosition, targetPosition).LookVector;
   const inverseDirection = new CFrame(targetPosition, currentPosition).LookVector;
   const distance = currentPosition.sub(targetPosition).Magnitude;
@@ -188,9 +189,9 @@ function CalculateLookDirection(entity: PlayerEntity, target?: WorldEntity) {
   }
 
   const position = entity.humanoidModel.HumanoidRootPart.CFrame.Position;
-  const targetPosition = target.origin.Position;
+  const targetPosition = target.position;
 
-  const [, dirY] = new CFrame(position, target.origin.Position).ToOrientation();
+  const [, dirY] = new CFrame(position, target.position).ToOrientation();
   const [rotX, rotY, rotZ] = entity.humanoidModel.HumanoidRootPart.CFrame.ToOrientation();
   let finalRotation = math.lerp(rotY, dirY, 0.1);
 
@@ -205,8 +206,8 @@ function CalculateLookDirection(entity: PlayerEntity, target?: WorldEntity) {
 }
 
 function IsEntityFacingTo(entity: WorldEntity, position: Vector3) {
-  const pointDirection = new CFrame(entity.origin.Position.mul(new Vector3(1, 0, 1)), position.mul(new Vector3(1, 0, 1))).LookVector;
-  const facingDirection = entity.origin.LookVector.mul(new Vector3(1, 0, 1));
+  const pointDirection = new CFrame(entity.position.mul(new Vector3(1, 0, 1)), position.mul(new Vector3(1, 0, 1))).LookVector;
+  const facingDirection = entity.ConvertOriginToCFrame().LookVector.mul(new Vector3(1, 0, 1));
   const dot = facingDirection.Dot(pointDirection);
 
   return dot >= 0.5;
@@ -232,16 +233,16 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.network.ListenPacket(`${NETWORK_REPL_ID}botupd`, (sender, reader) => {
     if (!sender) return;
 
-    const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
+    const entityId = reader.string();
 
     const entity = env.entity.entities.get(entityId);
     if (!entity?.IsA("SwordPlayerEntity")) return;
     if (entity.GetUserFromNetworkOwner() !== sender) {
-      RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${sender}.`);
+      RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} BOT state update from ${sender}.`);
       return;
     }
 
-    entity.ApplyStateBuffer(reader);
+    entity.ApplyClientReplicationBuffer(reader);
   });
 });
 
@@ -260,12 +261,13 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
       CalculateLookDirection(ent, target);
 
-      ent.origin = ent.humanoidModel.GetPivot();
+      ent.position = ent.humanoidModel.GetPivot().Position;
       ent.velocity = ent.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
       ent.grounded = ent.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
 
       const packet = new NetworkPacket(`${NETWORK_REPL_ID}botupd`);
-      ent.WriteStateBuffer();
+      writeBufferString(ent.id);
+      ent.WriteClientStateBuffer();
       env.network.SendPacket(packet);
     }
   });

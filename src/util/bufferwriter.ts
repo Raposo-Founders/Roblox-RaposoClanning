@@ -167,14 +167,14 @@ export function writeBufferBool(value: boolean) {
   });
 }
 
-export function writeBufferVector(value1: number, value2: number, value3: number) {
+export function writeBufferVector(value: Vector3) {
   const thread = coroutine.running();
   const bufferQueue = bufferCreationThreads.get(thread);
   assert(bufferQueue, "No buffer creation spawned on the current thread.");
 
   bufferQueue.push({
     type: BufferByteType.vec,
-    value: vector.create(value1, value2, value3),
+    value: value,
   });
 }
 
@@ -290,9 +290,9 @@ export function finalizeBufferCreation() {
       currentOffset += 1;
       break;
     case BufferByteType.vec: {
-      const x = (element.value as vector).x;
-      const y = (element.value as vector).y;
-      const z = (element.value as vector).z;
+      const x = (element.value as Vector3).X;
+      const y = (element.value as Vector3).Y;
+      const z = (element.value as Vector3).Z;
       const addOffset = 4;
 
       buffer.writef32(bfr, currentOffset, x);

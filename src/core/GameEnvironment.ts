@@ -1,12 +1,13 @@
 import { Players } from "@rbxts/services";
 import { LifecycleContainer } from "core/GameLifecycle";
+import { EntityCompareSnapshotVersions, GetLatestClientAknowledgedSnapshot, GetSnapshotsFromEnvironmentId, ReadBufferEntityChanges, StoreEnvironmentSnapshot, WriteEntityBufferChanges } from "core/Snapshot";
 import { RaposoConsole } from "logging";
 import { EntityManager } from "../entities";
 import { gameValues } from "../gamevalues";
-import { startBufferCreation, writeBufferString } from "../util/bufferwriter";
+import { writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
 import { RandomString } from "../util/utilfuncs";
-import { NetworkDataStreamer, SendStandardMessage } from "./NetworkModel";
+import { NetworkDataStreamer, NetworkPacket, SendStandardMessage } from "./NetworkModel";
 
 // # Types
 type T_EnvironmentBinding = (env: GameEnvironment) => void;
@@ -59,6 +60,104 @@ class GameEnvironment {
     // Execute bindings
     for (const callback of GameEnvironment.boundCallbacks)
       task.spawn(callback, this);
+
+    // # Replication
+    if (isServer) {
+      this.lifecycle.BindTickrate(() => {
+        const currentSnapshot = StoreEnvironmentSnapshot(this);
+
+        // Compute the snapshot difference for all clients
+        for (const client of this.players) {
+          const lastClientSnapshot = GetLatestClientAknowledgedSnapshot(this.id, client);
+          const differenceSnapshot = EntityCompareSnapshotVersions(this, lastClientSnapshot, currentSnapshot);
+
+          const packetConfig = new NetworkPacket("gameenv_repl");
+          packetConfig.reliable = false;
+          packetConfig.players = [client];
+
+          writeBufferString(currentSnapshot.id);
+          writeBufferString(lastClientSnapshot?.id ?? "0");
+          WriteEntityBufferChanges(differenceSnapshot);
+
+          this.network.SendPacket(packetConfig);
+        }
+
+        // Eliminate old snapshots
+        const environmentSnapshots = GetSnapshotsFromEnvironmentId(this.id) || new Map();
+        if (environmentSnapshots.size() > 32) {
+          for (const [, snapshot] of environmentSnapshots) {
+            if (currentSnapshot.version - snapshot.version <= 32) continue;
+
+            snapshot.entities.clear();
+            snapshot.acknowledgedClients.clear();
+            environmentSnapshots.delete(id);
+          }
+        }
+      });
+
+      this.network.ListenPacket("gameenv_snap_ack", (sender, reader) => {
+        if (!sender) return;
+
+        const snapshotId = reader.string();
+
+        const snapshotList = GetSnapshotsFromEnvironmentId(this.id);
+        if (!snapshotList || snapshotList.size() <= 0) return;
+
+        const targetSnapshot = snapshotList.get(snapshotId);
+        if (!targetSnapshot) return;
+
+        targetSnapshot.acknowledgedClients.add(sender.UserId);
+      });
+    }
+
+    if (!isServer) {
+      this.network.ListenPacket("gameenv_repl", (_, reader) => {
+        const currentSnapshotId = reader.string();
+        const referenceSnapshotId = reader.string();
+
+        const entityChanges = ReadBufferEntityChanges(reader);
+
+        // Create new entities
+        for (const newEntityInfo of entityChanges.new) {
+          if (this.entity.entities.has(newEntityInfo.id)) continue;
+          this.entity.createEntity(newEntityInfo.classname, newEntityInfo.id);
+        }
+
+        // Synchronize changes
+        for (const [entityId, entityState] of entityChanges.changed) {
+          const entity = this.entity.entities.get(entityId);
+          if (!entity) continue;
+
+          for (const [variableName, valueInfo] of entityState) {
+            const existingEntityValue = rawget(entity, variableName);
+            if (existingEntityValue === undefined) continue;
+
+            if (typeOf(existingEntityValue) !== typeOf(valueInfo.value)) {
+              RaposoConsole.Info(`Invalid entity variable type! "${variableName}" ${typeOf(existingEntityValue)} -> ${typeOf(valueInfo.value)}`);
+              continue;
+            }
+
+            if (!entity.networkablePropertiesHandlers.has(variableName))
+              rawset(entity, variableName, valueInfo.value);
+
+            entity.networkablePropertiesHandlers.get(variableName)?.(entityState, valueInfo.value);
+          }
+        }
+
+        // Remove entities
+        for (const entityId of entityChanges.removed)
+          if (this.entity.entities.has(entityId))
+            this.entity.killThisFucker(this.entity.entities.get(entityId)!);
+
+        // Acknowledge snapshot
+        const packetConfig = new NetworkPacket("gameenv_snap_ack");
+        packetConfig.reliable = false;
+
+        writeBufferString(currentSnapshotId);
+
+        this.network.SendPacket(packetConfig);
+      });
+    }
   }
 
   async Close() {

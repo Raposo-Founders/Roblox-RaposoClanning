@@ -132,21 +132,23 @@ function GetPartsInSwordHitbox(entity: SwordPlayerEntity, rightArmCFrame: CFrame
     filteredList.push(part);
   }
 
-  const visualIndicator = new Instance("BoxHandleAdornment");
-  visualIndicator.Adornee = workspace;
-  visualIndicator.CFrame = hitboxCFrame;
-  visualIndicator.Size = swordSize;
-  visualIndicator.Transparency = 0.75;
-  visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 1, 1) : new Color3(0, 1, 1);
-  visualIndicator.Parent = workspace;
+  if (RunService.IsStudio()) {
+    const visualIndicator = new Instance("BoxHandleAdornment");
+    visualIndicator.Adornee = workspace;
+    visualIndicator.CFrame = hitboxCFrame;
+    visualIndicator.Size = swordSize;
+    visualIndicator.Transparency = 0.75;
+    visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 1, 1) : new Color3(0, 1, 1);
+    visualIndicator.Parent = workspace;
 
-  if (filteredList.size() > 0)
-    visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 0.75, 0) : new Color3(1, 0, 0);
+    if (filteredList.size() > 0)
+      visualIndicator.Color3 = entity.currentState !== SwordState.Lunge ? new Color3(1, 0.75, 0) : new Color3(1, 0, 0);
 
-  task.defer(() => {
-    RunService.Heartbeat.Wait();
-    visualIndicator.Destroy();
-  });
+    task.defer(() => {
+      RunService.Heartbeat.Wait();
+      visualIndicator.Destroy();
+    });
+  }
 
   return filteredList;
 }
@@ -231,7 +233,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const touchedHandler = (other: BasePart) => {
       if (env.isPlayback) return;
-      if (!ent.IsWeaponEquipped()) return;
+      if (!ent.isEquipped) return;
       if (!DoesInstanceExist(ent.humanoidModel)) return;
       if (other.IsDescendantOf(WorldProvider.MapFolder)) return;
       if (other.IsDescendantOf(ent.humanoidModel)) return; // Hitting ourselves, ignore...
@@ -262,7 +264,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     const unbindLifecycleUpdate1 = env.lifecycle.BindLateUpdate(() => {
       if (!ent.humanoidModel || !DoesInstanceExist(ent.humanoidModel)) return;
 
-      const isEquipped = ent.health > 0 && ent.IsWeaponEquipped();
+      const isEquipped = ent.health > 0 && ent.isEquipped;
 
       swordMotor.C1 = getGripPosition();
       swordModel.Transparency = isEquipped ? 0 : 1;
@@ -276,7 +278,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
         if (existingHits.has(part)) continue;
         existingHits.add(part);
         newHits.add(part);
-        RaposoConsole.Info(part.GetFullName());
+        // RaposoConsole.Info(part.GetFullName());
       }
 
       for (const oldHits of existingHits) {
@@ -297,7 +299,5 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
       unbindLifecycleUpdate1();
     });
-
-    print("Finished setting up", ent.classname, ent.id);
   });
 });

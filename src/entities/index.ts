@@ -52,11 +52,7 @@ export class EntityManager {
 
   constructor(public environment: T_GameEnvironment) { }
 
-  async createEntity<
-    K extends keyof GameEntities,
-    E extends GameEntities[K],
-    C extends E extends new (...args: infer A) => BaseEntity ? A : never[],
-  >(classname: K, entityId: string | undefined, ...args: C): Promise<EntityType<K>> {
+  async createEntity<K extends keyof GameEntities>(classname: K, entityId: string | undefined): Promise<EntityType<K>> {
     const entity_constructor = entitiesBuildList.get(classname);
     assert(entity_constructor, `Attempt to create unknown entity: "${classname}"`);
 
@@ -77,7 +73,7 @@ export class EntityManager {
     if (this.entities.has(entityId))
       throw `Entity of id ${entityId} already exists as an ${this.entities.get(entityId)!.classname}.`;
 
-    const entity = new entity_constructor(...(args as never[]));
+    const entity = new entity_constructor();
     rawset(entity, "environment", this.environment);
     rawset(entity, "id", entityId);
 

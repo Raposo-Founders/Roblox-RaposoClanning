@@ -42,32 +42,20 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       }
       if (!callerEntity) continue;
 
-      session.entity.createEntity("SwordPlayerEntity", `bot_${entityName}`, "", sender.UserId)
+      session.entity.createEntity("SwordPlayerEntity", `bot_${entityName}`)
         .andThen(ent => {
+          ent.appearanceId = sender.UserId;
           ent.team = PlayerTeam.Raiders;
           ent.networkOwner = tostring(sender!.GetAttribute(gameValues.usersessionid));
 
-          let currentThread: thread | undefined;
+          session.lifecycle.BindTickrate((ctx, val) => {
+            if (ent.team === PlayerTeam.Spectators || ent.health <= 0) return;
+            if (!ent.isEquipped) return;
 
-          ent.spawned.Connect(() => {
-            if (currentThread)
-              task.cancel(currentThread);
-
-            ent.Equip();
-
-            currentThread = task.spawn(() => {
-              while (ent.health > 0) {
-                ent.Attack1();
-                env.lifecycle.YieldForTicks(1);
-              }
-            });
+            ent.AttackRequest();
           });
 
           ent.died.Connect(() => {
-            if (currentThread)
-              task.cancel(currentThread);
-            currentThread = undefined;
-
             task.wait(Players.RespawnTime);
             ent.Spawn();
           });
@@ -78,4 +66,4 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
         });
     }
   });
-});
+}); 

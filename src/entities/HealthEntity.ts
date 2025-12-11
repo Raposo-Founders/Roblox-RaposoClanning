@@ -1,5 +1,4 @@
-import { BufferReader } from "util/bufferreader";
-import { writeBufferU16 } from "util/bufferwriter";
+import { BufferByteType } from "util/bufferwriter";
 import Signal from "util/signal";
 import WorldEntity from "./WorldEntity";
 
@@ -21,6 +20,7 @@ abstract class HealthEntity extends WorldEntity {
   canDealDamage = true;
 
   readonly tookDamage = new Signal<[old: number, new: number, attacker?: WorldEntity]>();
+  readonly spawned = new Signal();
   readonly died = new Signal<[attacker?: WorldEntity]>();
   readonly attackersList: AttackerInfo[] = [];
 
@@ -28,6 +28,24 @@ abstract class HealthEntity extends WorldEntity {
     super();
 
     this.inheritanceList.add("HealthEntity");
+
+    this.RegisterNetworkableProperty("health", BufferByteType.u16);
+    this.RegisterNetworkableProperty("maxHealth", BufferByteType.u16);
+
+    this.RegisterNetworkablePropertyHandler("health", (ctx, val) => {
+      const originalHealth = this.health;
+
+      this.health = val;
+
+      if (val !== originalHealth)
+        this.tookDamage.Fire(originalHealth, val);
+
+      if (originalHealth > 0 && val <= 0)
+        this.died.Fire();
+
+      if (val > 0 && originalHealth <= 0)
+        this.spawned.Fire();
+    });
   }
 
   takeDamage(amount: number, attacker?: WorldEntity) {
@@ -46,23 +64,6 @@ abstract class HealthEntity extends WorldEntity {
 
     if (previousHealthAmount > 0 && this.health <= 0)
       this.died.Fire(attacker);
-  }
-
-  WriteStateBuffer(): void {
-    super.WriteStateBuffer();
-
-    writeBufferU16(this.health);
-    writeBufferU16(this.maxHealth);
-  }
-
-  ApplyStateBuffer(reader: ReturnType<typeof BufferReader>): void {
-    super.ApplyStateBuffer(reader);
-
-    const health = reader.u16();
-    const maxHealth = reader.u16();
-
-    this.health = health;
-    this.maxHealth = maxHealth;
   }
 }
 

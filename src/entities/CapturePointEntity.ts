@@ -1,8 +1,8 @@
+import { PlayerTeam } from "gamevalues";
 import { BufferReader } from "util/bufferreader";
-import { writeBufferBool, writeBufferF32, writeBufferString, writeBufferU8, writeBufferVector } from "util/bufferwriter";
+import { BufferByteType, writeBufferBool, writeBufferF32, writeBufferString, writeBufferU8 } from "util/bufferwriter";
 import { registerEntityClass } from ".";
 import PlayerEntity from "./PlayerEntity";
-import { PlayerTeam } from "gamevalues";
 import WorldEntity from "./WorldEntity";
 
 declare global {
@@ -38,47 +38,23 @@ function IsPointInZone(point: Vector3, cf: CFrame, size: Vector3) {
 export default class CapturePointEntity extends WorldEntity {
   readonly classname: keyof GameEntities = "CapturePointEntity";
 
-  velocity = new Vector3();
-
   current_team = PlayerTeam.Spectators;
   capture_progress = 0; // (float) -1(raiders) to 1(defenders).
   capture_speed = 2.5;
   is_instant_cap = false;
 
-  constructor(public origin: CFrame, public size: Vector3) {
+  constructor() {
     super();
     this.inheritanceList.add("CapturePointEntity");
-  }
 
-  WriteStateBuffer(): void {
-    writeBufferString(this.id);
-
-    super.WriteStateBuffer();
-
-    writeBufferF32(this.capture_progress);
-    writeBufferU8(this.capture_speed);
-    writeBufferU8(this.current_team);
-    writeBufferBool(this.is_instant_cap);
-  }
-
-  ApplyStateBuffer(reader: ReturnType<typeof BufferReader>): void {
-    super.ApplyStateBuffer(reader);
-
-    if (this.environment.isServer && this.environment.isPlayback) return;
-
-    const captureProgress = reader.f32();
-    const captureSpeed = reader.u8();
-    const currentTeam = reader.u8();
-    const instantCap = reader.bool();
-
-    this.capture_progress = captureProgress;
-    this.capture_speed = captureSpeed;
-    this.current_team = currentTeam;
-    this.is_instant_cap = instantCap;
+    this.RegisterNetworkableProperty("capture_progress", BufferByteType.f32);
+    this.RegisterNetworkableProperty("capture_speed", BufferByteType.f32);
+    this.RegisterNetworkableProperty("current_team", BufferByteType.u8);
+    this.RegisterNetworkableProperty("is_instant_cap", BufferByteType.bool);
   }
 
   Think(dt: number): void {
-    
+    this.UpdateCaptureProgress(dt);
   }
   
   UpdateCaptureProgress(dt: number) {
@@ -105,7 +81,7 @@ export default class CapturePointEntity extends WorldEntity {
 
     for (const ent of this.environment.entity.getEntitiesThatIsA("PlayerEntity")) {
       if (ent.health <= 0 || ent.team === PlayerTeam.Spectators) continue;
-      if (!IsPointInZone(ent.origin.Position, this.origin, this.size)) continue;
+      if (!IsPointInZone(ent.position, this.ConvertOriginToCFrame(), this.size)) continue;
 
       playersList.push(ent);
     }

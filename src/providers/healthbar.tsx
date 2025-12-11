@@ -81,7 +81,7 @@ function EntityHealthBar(props: { env: T_GameEnvironment, entity: PlayerEntity, 
     const camera = workspace.CurrentCamera!;
     const [viewportPosition, onViewport] = camera.WorldToViewportPoint(props.part.Position.add(POSITION_OFFSET));
 
-    const distance = camera.CFrame.Position.sub(props.entity.origin.Position).Magnitude;
+    const distance = camera.CFrame.Position.sub(props.entity.position).Magnitude;
     let scaleAmount = 1;
     if (distance > NEAR_DISTANCE) {
       const farOffset = FAR_DISTANCE - NEAR_DISTANCE;

@@ -23,8 +23,6 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const entity = getLocalPlayerEntity(env);
     if (!entity || !DoesInstanceExist(entity.humanoidModel)) return;
-
-    entity.humanoidModel.HumanoidRootPart.Anchored = entity.anchored || entity.health <= 0;
     if (entity.health <= 0) return;
 
     SetCameraTrackingObject(entity.humanoidModel.FindFirstChild("Head"));
@@ -38,10 +36,11 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       entity.humanoidModel.HumanoidRootPart.CFrame = new CFrame(currentPosition.Position).mul(CFrame.Angles(charX, camRotY, charZ));
     }
 
-    entity.humanoidModel.Humanoid.AutoRotate = !IsCameraShiftlockEnabled();
+    const pivot = entity.humanoidModel.HumanoidRootPart.CFrame;
+    const [rotY, rotX, rotZ] = pivot.ToOrientation();
 
-    entity.origin = entity.humanoidModel.GetPivot();
-    entity.velocity = entity.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
-    entity.grounded = entity.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
+    entity.humanoidModel.Humanoid.AutoRotate = !IsCameraShiftlockEnabled();
+    entity.position = pivot.Position;
+    entity.rotation = new Vector3(math.deg(rotX), math.deg(rotY), math.deg(rotZ));
   });
 });

@@ -19,7 +19,10 @@ function SpawnCapturePoints(session: GameEnvironment) {
     if (!obj.IsA("BasePart")) continue;
     if (obj.Name !== "ent_objective_capturepoint") continue;
 
-    session.entity.createEntity("CapturePointEntity", undefined, obj.CFrame, obj.Size);
+    session.entity.createEntity("CapturePointEntity", undefined).andThen(entity => {
+      entity.position = obj.CFrame.Position;
+      entity.size = obj.Size;
+    });
   }
 }
 
@@ -170,18 +173,6 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       ChatSystem.sendSystemMessage(`Player ${controller.Name} moved to spectators: Not in the raiding group.`);
     }
   });
-
-  env.lifecycle.BindTickrate(ctx => {
-    // if (!isRunning) return;
-
-    for (const ent of env.entity.getEntitiesThatIsA("CapturePointEntity")) {
-      ent.UpdateCaptureProgress(ctx.tickrate);
-
-      const packet = new NetworkPacket("cpent_update");
-      ent.WriteStateBuffer();
-      env.network.SendPacket(packet);
-    }
-  });
 });
 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
@@ -202,25 +193,6 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     uiValues.hud_gamemode[1]("Fairzone"); // TODO: Replicate current gamemode
     uiValues.hud_team_size[1](matchTeamSize);
     uiValues.hud_raiders_group[1](raidingGroupId);
-  });
-
-  env.network.ListenPacket("cpent_update", (sender, reader) => {
-    const entityId = reader.string();
-
-    const targetEntity = env.entity.entities.get(entityId);
-    if (!targetEntity || !targetEntity.IsA("CapturePointEntity")) {
-
-      env.entity.createEntity(
-        "CapturePointEntity",
-        entityId,
-        new CFrame(),
-        Vector3.one,
-      ).andThen(ent => ent.ApplyStateBuffer(reader));
-
-      return;
-    }
-
-    targetEntity.ApplyStateBuffer(reader);
   });
 });
 

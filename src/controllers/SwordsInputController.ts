@@ -2,6 +2,7 @@ import { ContextActionService, RunService, UserInputService } from "@rbxts/servi
 import GameEnvironment from "core/GameEnvironment";
 import { IsCameraShiftlockEnabled, SetCameraShiftLockEnabled } from "./CameraController";
 import { getLocalPlayerEntity } from "./LocalEntityController";
+import { NetworkPacket } from "core/NetworkModel";
 
 // # Variables
 let swordsAutoAttack = false;
@@ -16,7 +17,7 @@ function swordsAttack() {
   const entity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
   if (!entity?.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
-  entity.Attack1();
+  entity.AttackRequest();
 }
 
 function swordsEquipToggle(state: Enum.UserInputState) {
@@ -25,7 +26,7 @@ function swordsEquipToggle(state: Enum.UserInputState) {
   const entity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
   if (!entity?.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
-  if (entity.IsWeaponEquipped())
+  if (entity.isEquipped)
     entity.Unequip();
   else
     entity.Equip();
@@ -101,6 +102,6 @@ if (RunService.IsClient())
       if (!entity || entity.health <= 0) return;
 
       if (swordsAutoAttack && entity.IsA("SwordPlayerEntity"))
-        entity.Attack1();
+        entity.AttackRequest();
     });
   });

@@ -6,6 +6,9 @@ declare global {
   interface GameEntities {
     BaseEntity: typeof BaseEntity;
   }
+
+  type T_EntityState = Map<string, { value: unknown, valueType: BufferByteType }>; // "string" is the keyof class / variable
+  type T_EntityStateHandler<T> = (ctx: T_EntityState, value: T) => void;
 }
 
 abstract class BaseEntity {
@@ -20,13 +23,20 @@ abstract class BaseEntity {
   readonly attributesList = new Map<string, unknown>();
 
   private networkableProperties = new Map<string, BufferByteType>();
+  readonly networkablePropertiesHandlers = new Map<string, T_EntityStateHandler<unknown>>();
 
   constructor() {
     this.inheritanceList.add("BaseEntity");
+
+    this.RegisterNetworkableProperty("id", BufferByteType.str);
   }
 
   protected RegisterNetworkableProperty<T extends keyof this>(variableName: T, byteType: BufferByteType) {
     this.networkableProperties.set(tostring(variableName), byteType);
+  }
+
+  protected RegisterNetworkablePropertyHandler<T extends keyof this>(variableName: T, handler: T_EntityStateHandler<this[T]>) {
+    this.networkablePropertiesHandlers.set(tostring(variableName), handler as T_EntityStateHandler<unknown>);
   }
 
   IsA<C extends keyof GameEntities>(classname: C): this is EntityType<C> {
@@ -61,8 +71,8 @@ abstract class BaseEntity {
     return this.attributesList.get(name);
   }
 
-  GetNetworkSnapshot() {
-    const valuesContent = new Map<string, { value: unknown, valueType: BufferByteType }>();
+  GetStateSnapshot() {
+    const valuesContent: T_EntityState = new Map();
 
     for (const [name, btype] of this.networkableProperties) {
       const value = this[name as keyof this];
@@ -75,9 +85,6 @@ abstract class BaseEntity {
   }
 
   abstract Destroy(): void;
-
-  abstract WriteStateBuffer(): void;
-  abstract ApplyStateBuffer(reader: ReturnType<typeof BufferReader>): void;
 
   abstract Think(dt: number): void;
 }

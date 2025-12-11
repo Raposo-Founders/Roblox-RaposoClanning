@@ -1,15 +1,15 @@
 import * as Services from "@rbxts/services";
-import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
 import { NetworkPacket } from "core/NetworkModel";
 import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
 import { BufferReader } from "util/bufferreader";
-import { startBufferCreation, writeBufferBool, writeBufferString, writeBufferU32, writeBufferU8 } from "util/bufferwriter";
+import { BufferByteType, startBufferCreation, writeBufferBool, writeBufferF32, writeBufferString, writeBufferU8, writeBufferVector } from "util/bufferwriter";
 import Signal from "util/signal";
 import { registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
 import PlayerEntity, { getPlayerEntityFromController } from "./PlayerEntity";
+import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 
 // # Types
 declare global {
@@ -21,7 +21,7 @@ declare global {
 // # Constants & variables
 export enum SwordState {
   Idle = 5,
-  Swing = 10,
+  Slash = 10,
   Lunge = 30,
 }
 
@@ -33,63 +33,67 @@ const NETWORK_ID = "sword_";
 export class SwordPlayerEntity extends PlayerEntity {
   classname: keyof GameEntities = "SwordPlayerEntity";
 
-  hitDetectionEnabled = true;
   currentState = SwordState.Idle;
   hitboxTouched = new Signal<[target: HealthEntity, part: BasePart]>();
   stateChanged = new Signal<[newState: SwordState]>();
 
-  private canAttack = true;
-  private isEquipped = false;
-  private lastActiveTime = 0;
-  private activationCount = 0;
+  isEquipped = false;
+  lastStateTime = 0;
+  private attackRequest: { time: number, handled: boolean }[] = [];
 
-  constructor(public controller: string, public appearanceId = 1) {
-    super(controller, appearanceId);
+  constructor() {
+    super();
 
     this.inheritanceList.add("SwordPlayerEntity");
 
-    task.defer(() => {
+    this.OnSetupFinished(() => {
       if (this.environment.isServer) return;
 
       this.spawned.Connect(() => this.Equip());
       this.died.Connect(() => this.Unequip());
     });
+
+    this.RegisterNetworkableProperty("currentState", BufferByteType.u8);
+    this.RegisterNetworkableProperty("isEquipped", BufferByteType.bool);
+
+    this.RegisterNetworkablePropertyHandler("isEquipped", (ctx, val) => {
+      if (this.GetUserFromController() === Services.Players.LocalPlayer || this.GetUserFromNetworkOwner() === Services.Players.LocalPlayer) return;
+      this.isEquipped = val;
+    });
+
+    this.RegisterNetworkablePropertyHandler("currentState", (ctx, val) => {
+      if (val !== this.currentState) {
+        if (val === SwordState.Lunge)
+          this.LungeAnimation();
+
+        if (val === SwordState.Slash)
+          this.SlashAnimation();
+      }
+
+      this.currentState = val;
+    });
   }
 
-  WriteStateBuffer() {
-    super.WriteStateBuffer();
-
-    writeBufferBool(this.isEquipped);
-    writeBufferU32(this.activationCount);
-  }
-
-  ApplyStateBuffer(reader: ReturnType<typeof BufferReader>): void {
-    super.ApplyStateBuffer(reader);
+  ApplyClientReplicationBuffer(reader: ReturnType<typeof BufferReader>): void {
+    super.ApplyClientReplicationBuffer(reader);
 
     const isEquipped = reader.bool();
-    const activationCount = reader.u32();
 
-    if (this.environment.isServer || this.GetUserFromController() !== Services.Players.LocalPlayer)
-      if (this.isEquipped !== isEquipped)
-        if (isEquipped)
-          this.Equip();
-        else
-          this.Unequip();
+    if (this.isEquipped !== isEquipped)
+      if (isEquipped)
+        this.Equip();
+      else
+        this.Unequip();
+  }
 
-    if (this.environment.isPlayback) {
-      if (this.activationCount !== activationCount)
-        this.Attack1();
+  WriteClientStateBuffer(): void {
+    super.WriteClientStateBuffer();
 
-      this.activationCount = activationCount;
-    }
+    writeBufferBool(this.isEquipped);
   }
 
   Destroy(): void {
     this.hitboxTouched.Clear();
-  }
-
-  IsWeaponEquipped() {
-    return this.isEquipped;
   }
 
   Equip() {
@@ -106,54 +110,108 @@ export class SwordPlayerEntity extends PlayerEntity {
     this.animator?.StopAnimation("toolnone");
   }
 
-  async Attack1() {
-    if (!this.environment.isServer && !this.environment.isPlayback) {
-      startBufferCreation();
-      this.environment.network.SendPacket(new NetworkPacket(`${NETWORK_ID}c_activate`));
-
-      return;
-    }
-
-    if (!this.isEquipped || !this.canAttack) return;
-    this.canAttack = false;
+  Think(dt: number): void {
+    super.Think(dt);
 
     const currentTime = time();
 
-    if (!this.environment.isPlayback)
-      this.activationCount++;
+    if (this.environment.isServer) {
 
-    if (currentTime - this.lastActiveTime <= 0.2)
-      this.Lunge().expect();
-    else
-      this.Swing().expect();
+      let targetState = this.currentState;
+      const stateTimeDifference = currentTime - this.lastStateTime;
 
-    this.lastActiveTime = currentTime;
-    this.currentState = SwordState.Idle;
-    this.canAttack = true;
+      let hasAttackRequest = false;
+
+      for (const request of this.attackRequest) {
+        if (request.handled) continue;
+        hasAttackRequest = true;
+        break;
+      }
+
+      if (this.currentState !== SwordState.Lunge && hasAttackRequest && this.isEquipped) {
+        // Get attack time difference
+        const latestAttackTime = this.attackRequest[0];
+        const previousAttackTime = this.attackRequest[1] ?? { time: 0, handled: false };
+        const attackTimeDifference = latestAttackTime.time - previousAttackTime.time;
+
+        targetState = attackTimeDifference <= 0.2 ? SwordState.Lunge : SwordState.Slash;
+
+        if (targetState === SwordState.Lunge)
+          this.LungeAnimation();
+        else
+          this.SlashAnimation();
+
+        latestAttackTime.handled = true;
+        previousAttackTime.handled = true;
+
+        if (targetState === SwordState.Lunge)
+          this.attackRequest.clear();
+      }
+
+      if ((this.currentState === SwordState.Slash && stateTimeDifference > 0.1) || (this.currentState === SwordState.Lunge && stateTimeDifference > 1)) {
+        targetState = SwordState.Idle;
+      }
+
+      if (targetState !== this.currentState) {
+        this.currentState = targetState;
+        this.lastStateTime = currentTime;
+        this.stateChanged.Fire(targetState);
+
+        const packet = new NetworkPacket(`${NETWORK_ID}swordState`);
+        packet.reliable = false;
+        writeBufferString(this.id);
+        writeBufferU8(targetState);
+        this.environment.network.SendPacket(packet);
+      }
+
+      // Remove handled attack requests
+      if (this.attackRequest.size() > 0) {
+        let latestAttackTime = 0;
+
+        for (let i = 0; i < this.attackRequest.size(); i++) {
+          const element = this.attackRequest[i];
+          if (!element) continue;
+
+          if (latestAttackTime < element.time)
+            latestAttackTime = element.time;
+
+          if (element.handled && latestAttackTime - element.time >= 1) {
+            this.attackRequest.remove(i);
+            i--;
+          }
+        }
+      }
+    }
   }
 
-  async Lunge() {
+  async LungeAnimation() {
     if (!this.isEquipped) return;
     this.animator?.PlayAnimation("toollunge", "Action3", true);
     this.animator?.StopAnimation("toolslash");
 
-    this.currentState = SwordState.Lunge;
-    this.stateChanged.Fire(this.currentState);
-
     task.wait(1);
 
-    this.currentState = SwordState.Idle;
-    this.stateChanged.Fire(this.currentState);
     this.animator?.StopAnimation("toollunge");
   }
 
-  async Swing() {
+  async SlashAnimation() {
     if (!this.isEquipped) return;
     this.animator?.StopAnimation("toollunge");
     this.animator?.PlayAnimation("toolslash", "Action2", true);
+  }
 
-    this.currentState = SwordState.Swing;
-    this.stateChanged.Fire(this.currentState);
+  AttackRequest(attackTime = time()) {
+    if (!this.environment.isServer) {
+      const packet = new NetworkPacket(`${NETWORK_ID}c_activate`);
+      writeBufferF32(time());
+      this.environment.network.SendPacket(packet);
+      return;
+    }
+
+    if (this.currentState === SwordState.Lunge) return;
+
+    this.attackRequest.push({ time: attackTime, handled: false });
+    this.attackRequest.sort((a, b) => a.time > b.time);
   }
 }
 
@@ -164,18 +222,6 @@ registerEntityClass("SwordPlayerEntity", SwordPlayerEntity);
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (!env.isServer) return;
 
-  env.entity.entityCreated.Connect(entity => {
-    if (!entity.IsA("SwordPlayerEntity")) return;
-
-    // Listen for state changes
-    entity.stateChanged.Connect(() => {
-      const packet = new NetworkPacket(`${NETWORK_ID}changed`);
-      writeBufferString(entity.id);
-      writeBufferU8(entity.currentState);
-      env.network.SendPacket(packet);
-    });
-  });
-
   // Activation requests
   env.network.ListenPacket(`${NETWORK_ID}c_activate`, (sender, reader) => {
     if (!sender) return;
@@ -183,89 +229,28 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     const entity = getPlayerEntityFromController(env.entity, tostring(sender.GetAttribute(gameValues.usersessionid)));
     if (!entity || !entity.IsA("SwordPlayerEntity")) return;
 
-    entity.Attack1();
-  });
+    const clientTime = reader.f32();
 
-  // Replicating entities
-  env.lifecycle.BindTickrate(() => {
-    const entitiesList = env.entity.getEntitiesThatIsA("SwordPlayerEntity");
-
-    const packet = new NetworkPacket(`${NETWORK_ID}sync`);
-
-    writeBufferU8(math.min(entitiesList.size(), 255)); // Yes... I know this limits only up to 255 entities, dickhead.
-    for (const ent of entitiesList)
-      writeBufferString(ent.id);
-    env.network.SendPacket(packet);
-
-    for (const ent of env.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
-      const packet = new NetworkPacket(`${NETWORK_ID}replication`);
-      ent.WriteStateBuffer();
-      env.network.SendPacket(packet);
-    }
+    entity.AttackRequest(clientTime);
   });
 
   // Client state updating
   env.network.ListenPacket(`${NETWORK_ID}c_stateupd`, (sender, reader) => {
     if (!sender) return;
 
-    const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
-
-    const entity = env.entity.entities.get(entityId);
-    if (!entity?.IsA("SwordPlayerEntity")) return;
-    if (entity.GetUserFromController() !== sender) {
+    const entity = getPlayerEntityFromController(env.entity, tostring(sender.GetAttribute(gameValues.usersessionid)));
+    if (!entity?.IsA("SwordPlayerEntity") || entity.GetUserFromController() !== sender) {
       RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} state update from ${sender}.`);
       return;
     }
 
-    entity.ApplyStateBuffer(reader);
+    entity.ApplyClientReplicationBuffer(reader);
   });
 });
 
 // Client
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (env.isServer) return;
-  
-  let hasEntityInQueue = false;
-
-  // Entity replication
-  env.network.ListenPacket(`${NETWORK_ID}sync`, (sender, reader) => {
-    if (hasEntityInQueue) return; // Skip if entities are currently being created.
-    // ! MIGHT RESULT IN THE GAME HANGING FROM TIME TO TIME !
-
-    const listedServerEntities = new Set<EntityId>();
-
-    const amount = reader.u8();
-
-    for (let i = 0; i < amount; i++) {
-      const entityId = reader.string();
-
-      let entity = env.entity.entities.get(entityId);
-      if (!entity) {
-        hasEntityInQueue = true;
-
-        entity = env.entity.createEntity("SwordPlayerEntity", entityId, "", 1).expect();
-        hasEntityInQueue = false;
-      }
-
-      listedServerEntities.add(entityId);
-    }
-
-    // Deleting unlisted entities
-    for (const ent of env.entity.getEntitiesThatIsA("SwordPlayerEntity")) {
-      if (listedServerEntities.has(ent.id)) continue;
-      env.entity.killThisFucker(ent);
-    }
-  });
-
-  // Entity replication
-  env.network.ListenPacket(`${NETWORK_ID}replication`, (sender, reader) => {
-    const entityId = reader.string(); // Entity ID can be read from here due to PlayerEntity writing it first
-
-    const entity = env.entity.entities.get(entityId);
-    if (!entity?.IsA("SwordPlayerEntity")) return;
-
-    entity.ApplyStateBuffer(reader);
-  });
 
   // Client state update
   env.lifecycle.BindTickrate(() => {
@@ -273,23 +258,24 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     if (!entity || !entity.IsA("SwordPlayerEntity") || entity.health <= 0) return;
 
     const packet = new NetworkPacket(`${NETWORK_ID}c_stateupd`);
-    entity.WriteStateBuffer();
+    packet.reliable = true;
+
+    entity.WriteClientStateBuffer();
     env.network.SendPacket(packet);
   });
 
   // Sword / attack changes
-  env.network.ListenPacket(`${NETWORK_ID}changed`, (sender, reader) => {
+  env.network.ListenPacket(`${NETWORK_ID}swordState`, (sender, reader) => {
     const entityId = reader.string();
     const newState = reader.u8();
 
     const targetEntity = env.entity.entities.get(entityId);
     if (!targetEntity || !targetEntity.IsA("SwordPlayerEntity")) return;
-    if (targetEntity.currentState === newState) return;
 
     if (newState === SwordState.Lunge)
-      targetEntity.Lunge();
+      targetEntity.LungeAnimation();
 
-    if (newState === SwordState.Swing)
-      targetEntity.Swing();
+    if (newState === SwordState.Slash)
+      targetEntity.SlashAnimation();
   });
 });

@@ -1,9 +1,9 @@
-import { Players, TweenService } from "@rbxts/services";
+import { Debris, Players, RunService, TweenService } from "@rbxts/services";
 import { modelsFolder } from "folders";
 import { gameValues, PlayerTeam } from "gamevalues";
 import WorldProvider from "providers/WorldProvider";
 import { BufferReader } from "util/bufferreader";
-import { writeBufferBool, writeBufferString, writeBufferU16, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
+import { BufferByteType, writeBufferBool, writeBufferI16, writeBufferString, writeBufferU16, writeBufferU64, writeBufferU8, writeBufferVector } from "util/bufferwriter";
 import Signal from "util/signal";
 import { EntityManager, registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
@@ -23,7 +23,8 @@ declare global {
 // # Constants & variables
 const activePlayermodelTweens = new Map<string, Tween>();
 
-const positionDifferenceThreshold = 3;
+const positionDifferenceThreshold = 1;
+const playermodelTweenPositionThreshold = 5;
 const humanoidFetchDescriptionMaxAttempts = 5;
 
 // # Functions
@@ -60,18 +61,140 @@ export function getPlayerEntityFromController(environment: EntityManager, contro
       return ent;
 }
 
+function InsertEntityPlayermodel(entity: PlayerEntity) {
+  const humanoidModel = modelsFolder.WaitForChild("PlayerEntityHumanoidRig", 1)?.Clone() as CharacterModel | undefined;
+  assert(humanoidModel, `No PlayerEntityHumanoidRig has been found on the models folder.`);
+
+  humanoidModel.WaitForChild("HumanoidRootPart");
+  humanoidModel.WaitForChild("Humanoid");
+  humanoidModel.Humanoid.WaitForChild("Animator");
+  humanoidModel.WaitForChild("Torso");
+
+  humanoidModel.Name = entity.id;
+  humanoidModel.Parent = WorldProvider.ObjectsFolder;
+  humanoidModel.Humanoid.Health = 1;
+  humanoidModel.Humanoid.MaxHealth = 1;
+  humanoidModel.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+  humanoidModel.Humanoid.HealthDisplayDistance = 0;
+  humanoidModel.Humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff;
+  humanoidModel.Humanoid.SetStateEnabled("PlatformStanding", false);
+  humanoidModel.Humanoid.SetStateEnabled("Ragdoll", false);
+  humanoidModel.Humanoid.SetStateEnabled("Physics", false);
+  humanoidModel.Humanoid.SetStateEnabled("Dead", false);
+  humanoidModel.Humanoid.BreakJointsOnDeath = false;
+
+  entity.AssociateInstance(humanoidModel);
+
+  const refreshAppearance = () => {
+    const controller = entity.GetUserFromController() || entity.GetUserFromNetworkOwner();
+    if (!controller) return;
+
+    fetchHumanoidDescription(controller.UserId).andThen(val => {
+      if (!val) return;
+      entity.humanoidModel?.Humanoid.ApplyDescription(val);
+    });
+  };
+
+  const rigManager = new PlayermodelRigManager(humanoidModel);
+
+  const unbindConnection1 = entity.environment.lifecycle.BindLateUpdate(() => {
+    const rootPart = humanoidModel?.HumanoidRootPart;
+    const isLocalEntity = entity.GetUserFromController() === Players.LocalPlayer;
+
+    rigManager.animator.velocity = rootPart.AssemblyLinearVelocity || Vector3.zero;
+    rigManager.animator.is_grounded = entity.grounded;
+    rigManager.animator.Update();
+
+    // Update highlight
+    let fillColor = colorTable.spectatorsColor;
+    if (entity.team === PlayerTeam.Defenders) fillColor = colorTable.defendersColor;
+    if (entity.team === PlayerTeam.Raiders) fillColor = colorTable.raidersColor;
+
+    rigManager.highlight.Enabled = true;
+    rigManager.highlight.OutlineColor = Color3.fromHex(fillColor);
+    rigManager.highlight.DepthMode = isLocalEntity ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
+
+    if (!isLocalEntity) {
+      let localEntity: PlayerEntity | undefined;
+
+      for (const ent of entity.environment.entity.getEntitiesThatIsA("PlayerEntity")) {
+        if (ent === entity) continue;
+        if (ent.GetUserFromController() !== Players.LocalPlayer) continue;
+        localEntity = ent;
+        break;
+      }
+
+      if (localEntity)
+        rigManager.highlight.DepthMode = entity.team === localEntity.team ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
+    }
+  });
+
+  for (const inst of humanoidModel.GetDescendants()) {
+    if (inst.ClassName.match("Script")[0]) {
+      inst.Destroy();
+      continue;
+    }
+
+    if (inst.IsA("BasePart")) {
+      inst.CollisionGroup = "Playermodel";
+      inst.SetAttribute("OG_MATERIAL", inst.Material.Name);
+
+      continue;
+    }
+  }
+
+  entity.OnDelete(() => {
+    unbindConnection1();
+
+    humanoidModel.Destroy();
+    rawset(entity, "humanoidModel", undefined);
+  });
+  rawset(entity, "humanoidModel", humanoidModel);
+
+  entity.died.Connect(() => {
+    rigManager.SetMaterial();
+    rigManager.SetTransparency();
+    rigManager.SetJointsEnabled(false);
+
+    for (const inst of humanoidModel.GetChildren()) {
+      if (!inst.IsA("BasePart")) continue;
+
+      inst.AssemblyLinearVelocity = entity.velocity;
+      inst.AssemblyAngularVelocity = entity.velocity;
+    }
+  });
+
+  entity.spawned.Connect(() => {
+    rigManager.SetMaterial();
+    rigManager.SetTransparency();
+    rigManager.SetJointsEnabled(true);
+
+    for (const inst of humanoidModel.GetChildren()) {
+      if (!inst.IsA("BasePart")) continue;
+
+      inst.AssemblyLinearVelocity = new Vector3();
+      inst.AssemblyAngularVelocity = new Vector3();
+    }
+
+    refreshAppearance();
+  });
+
+  refreshAppearance();
+  createHealthBarForEntity(entity, humanoidModel.HumanoidRootPart);
+  entity.animator = rigManager.animator;
+}
+
 // # Class
 export default class PlayerEntity extends HealthEntity {
   readonly classname: keyof GameEntities = "PlayerEntity";
 
-  readonly spawned = new Signal<[origin: CFrame]>();
   health = 0;
   maxHealth = 100;
 
-  pendingTeleport = false;
-  origin = new CFrame();
-  size = new Vector3(2, 5, 2);
-  velocity = new Vector3();
+  private serverPosition = this.position;
+  private serverRotation = this.rotation;
+
+  pendingTeleport = true;
   grounded = false;
   anchored = false;
 
@@ -80,6 +203,8 @@ export default class PlayerEntity extends HealthEntity {
 
   team = PlayerTeam.Spectators;
   networkOwner = ""; // For BOT entities
+  controller = "";
+  appearanceId = 1;
 
   caseInfo = {
     isExploiter: false,
@@ -94,137 +219,93 @@ export default class PlayerEntity extends HealthEntity {
     country: "US",
   };
 
-  constructor(public controller: string, public appearanceId = 1) {
+  constructor() {
     super();
     this.inheritanceList.add("PlayerEntity");
 
     this.OnSetupFinished(() => {
       if (this.environment.isServer) return;
+      InsertEntityPlayermodel(this);
+    });
 
-      const humanoidModel = modelsFolder.WaitForChild("PlayerEntityHumanoidRig", 1)?.Clone() as CharacterModel | undefined;
-      assert(humanoidModel, `No PlayerEntityHumanoidRig has been found on the models folder.`);
+    this.RegisterNetworkableProperty("controller", BufferByteType.str);
+    this.RegisterNetworkableProperty("appearanceId", BufferByteType.u64);
+    this.RegisterNetworkableProperty("networkOwner", BufferByteType.str);
+    this.RegisterNetworkableProperty("team", BufferByteType.u8);
 
-      humanoidModel.WaitForChild("HumanoidRootPart");
-      humanoidModel.WaitForChild("Humanoid");
-      humanoidModel.Humanoid.WaitForChild("Animator");
-      humanoidModel.WaitForChild("Torso");
+    this.RegisterNetworkableProperty("pendingTeleport", BufferByteType.bool);
+    this.RegisterNetworkableProperty("grounded", BufferByteType.bool);
+    this.RegisterNetworkableProperty("anchored", BufferByteType.bool);
 
-      humanoidModel.Name = this.id;
-      humanoidModel.Parent = WorldProvider.ObjectsFolder;
-      humanoidModel.Humanoid.Health = 1;
-      humanoidModel.Humanoid.MaxHealth = 1;
-      humanoidModel.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-      humanoidModel.Humanoid.HealthDisplayDistance = 0;
-      humanoidModel.Humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff;
-      humanoidModel.Humanoid.SetStateEnabled("PlatformStanding", false);
-      humanoidModel.Humanoid.SetStateEnabled("Ragdoll", false);
-      humanoidModel.Humanoid.SetStateEnabled("Physics", false);
-      humanoidModel.Humanoid.SetStateEnabled("Dead", false);
-      humanoidModel.Humanoid.BreakJointsOnDeath = false;
+    this.RegisterNetworkablePropertyHandler("grounded", (ctx, val) => {
+      if (this.environment.isServer) return;
+      if (this.GetUserFromController() === Players.LocalPlayer || this.GetUserFromNetworkOwner() === Players.LocalPlayer) return;
 
-      this.AssociateInstance(humanoidModel);
+      this.grounded = val;
+    });
 
-      const refreshAppearance = () => {
-        const controller = this.GetUserFromController() || this.GetUserFromNetworkOwner();
-        if (!controller) return;
+    this.RegisterNetworkablePropertyHandler("position", (ctx, val) => {
+      const controller = this.GetUserFromController();
+      const netController = this.GetUserFromNetworkOwner();
+      const isLocalPlayer = !this.environment.isPlayback && controller === Players.LocalPlayer;
+      const isLocalBot = !this.environment.isPlayback && netController === Players.LocalPlayer;
+      const isLocalControl = isLocalPlayer || isLocalBot;
 
-        fetchHumanoidDescription(controller.UserId).andThen(val => {
-          if (!val) return;
-          this.humanoidModel?.Humanoid.ApplyDescription(val);
-        });
-      };
+      if (!isLocalControl)
+        this.position = val;
+      this.serverPosition = val;
 
-      const rigManager = new PlayermodelRigManager(humanoidModel);
+      if (RunService.IsStudio()) {
+        const rotation = CFrame.Angles(math.rad(this.serverRotation.Y), math.rad(this.serverRotation.X), math.rad(this.serverRotation.Z));
+        const cf = new CFrame(val).mul(rotation);
 
-      const unbindConnection1 = this.environment.lifecycle.BindLateUpdate(() => {
-        const rootPart = humanoidModel?.HumanoidRootPart;
-        const isLocalEntity = this.GetUserFromController() === Players.LocalPlayer;
+        const visualIndicator = new Instance("BoxHandleAdornment");
+        visualIndicator.Adornee = workspace;
+        visualIndicator.CFrame = cf;
+        visualIndicator.Size = new Vector3(4, 5, 1);
+        visualIndicator.Transparency = 0.5;
+        visualIndicator.Color3 = new Color3(0, 1, 1);
+        visualIndicator.Parent = workspace;
 
-        rigManager.animator.velocity = rootPart.AssemblyLinearVelocity || Vector3.zero;
-        rigManager.animator.is_grounded = this.grounded;
-        rigManager.animator.Update();
-
-        // Update highlight
-        let fillColor = colorTable.spectatorsColor;
-        if (this.team === PlayerTeam.Defenders) fillColor = colorTable.defendersColor;
-        if (this.team === PlayerTeam.Raiders) fillColor = colorTable.raidersColor;
-
-        rigManager.highlight.Enabled = true;
-        rigManager.highlight.OutlineColor = Color3.fromHex(fillColor);
-        rigManager.highlight.DepthMode = isLocalEntity ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
-
-        if (!isLocalEntity) {
-          let localEntity: PlayerEntity | undefined;
-
-          for (const ent of this.environment.entity.getEntitiesThatIsA("PlayerEntity")) {
-            if (ent === this) continue;
-            if (ent.GetUserFromController() !== Players.LocalPlayer) continue;
-            localEntity = ent;
-            break;
-          }
-
-          if (localEntity)
-            rigManager.highlight.DepthMode = this.team === localEntity.team ? Enum.HighlightDepthMode.AlwaysOnTop : Enum.HighlightDepthMode.Occluded;
-        }
-      });
-
-      for (const inst of humanoidModel.GetDescendants()) {
-        if (inst.ClassName.match("Script")[0]) {
-          inst.Destroy();
-          continue;
-        }
-
-        if (inst.IsA("BasePart")) {
-          inst.CollisionGroup = "Playermodel";
-          inst.SetAttribute("OG_MATERIAL", inst.Material.Name);
-
-          continue;
-        }
+        Debris.AddItem(visualIndicator, this.environment.lifecycle.tickrate);
       }
+    });
 
-      this.OnDelete(() => {
-        unbindConnection1();
+    this.RegisterNetworkablePropertyHandler("rotation", (ctx, val) => {
+      const controller = this.GetUserFromController();
+      const netController = this.GetUserFromNetworkOwner();
+      const isLocalPlayer = !this.environment.isPlayback && controller === Players.LocalPlayer;
+      const isLocalBot = !this.environment.isPlayback && netController === Players.LocalPlayer;
+      const isLocalControl = isLocalPlayer || isLocalBot;
 
-        humanoidModel.Destroy();
-        rawset(this, "humanoidModel", undefined);
-      });
-      rawset(this, "humanoidModel", humanoidModel);
-
-      this.died.Connect(() => {
-        rigManager.SetMaterial();
-        rigManager.SetTransparency();
-        rigManager.SetJointsEnabled(false);
-
-        for (const inst of humanoidModel.GetChildren()) {
-          if (!inst.IsA("BasePart")) continue;
-
-          inst.AssemblyLinearVelocity = this.velocity;
-          inst.AssemblyAngularVelocity = this.velocity;
-        }
-      });
-
-      this.spawned.Connect(() => {
-        rigManager.SetMaterial();
-        rigManager.SetTransparency();
-        rigManager.SetJointsEnabled(true);
-
-        for (const inst of humanoidModel.GetChildren()) {
-          if (!inst.IsA("BasePart")) continue;
-
-          inst.AssemblyLinearVelocity = new Vector3();
-          inst.AssemblyAngularVelocity = new Vector3();
-        }
-
-        refreshAppearance();
-      });
-
-      refreshAppearance();
-      createHealthBarForEntity(this, humanoidModel.HumanoidRootPart);
-      this.animator = rigManager.animator;
+      if (!isLocalControl)
+        this.rotation = val;
+      this.serverRotation = val;
     });
   }
 
-  Think(dt: number): void { }
+  Think(dt: number): void {
+    const controller = this.GetUserFromController();
+    const netController = this.GetUserFromNetworkOwner();
+    const isLocalPlayer = !this.environment.isPlayback && !this.environment.isServer && controller === Players.LocalPlayer;
+    const isLocalBot = !this.environment.isPlayback && !this.environment.isServer && netController === Players.LocalPlayer;
+    const isLocalControl = isLocalPlayer || isLocalBot;
+
+    if (!this.environment.isServer && DoesInstanceExist(this.humanoidModel)) {
+
+      if (isLocalControl && (this.anchored || this.pendingTeleport)) {
+        this.position = this.serverPosition;
+        this.rotation = this.serverRotation;
+        this.TeleportTo(this.ConvertOriginToCFrame());
+      }
+
+      this.humanoidModel.HumanoidRootPart.Anchored = isLocalControl && (this.anchored || this.pendingTeleport || this.health <= 0);
+      this.grounded = isLocalControl && this.health > 0 && this.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
+
+      if (!isLocalControl)
+        this.TeleportTo(this.ConvertOriginToCFrame());
+    }
+  }
 
   GetUserFromController() {
     if (this.controller === "") return;
@@ -244,144 +325,42 @@ export default class PlayerEntity extends HealthEntity {
     }
   }
 
-  WriteStateBuffer(): void {
-    writeBufferString(this.id);
+  WriteClientStateBuffer(): void {
+    if (!this.environment.isServer && this.humanoidModel) {
+      const pivot = this.humanoidModel.GetPivot();
+      const [rotY, rotX, rotZ] = pivot.ToOrientation();
 
-    super.WriteStateBuffer();
+      writeBufferVector(pivot.Position);
+      writeBufferVector(new Vector3(math.deg(rotX), math.deg(rotY), math.deg(rotZ)));
+      writeBufferVector(this.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? this.velocity);
+    } else {
+      writeBufferVector(this.position);
+      writeBufferVector(this.rotation);
+      writeBufferVector(this.velocity);
+    }
 
-    writeBufferBool(this.pendingTeleport);
     writeBufferBool(this.grounded);
-
-    writeBufferU8(this.team);
-    writeBufferString(this.controller);
-    writeBufferU64(this.appearanceId);
-    writeBufferU16(this.stats.kills);
-    writeBufferU16(this.stats.deaths);
-    writeBufferU16(this.stats.ping);
-    writeBufferU16(this.stats.damage);
-    writeBufferString(this.stats.country);
-
-    writeBufferBool(this.caseInfo.isExploiter);
-    writeBufferBool(this.caseInfo.isDegenerate);
-
-    writeBufferString(this.networkOwner);
   }
 
-  ApplyStateBuffer(reader: ReturnType<typeof BufferReader>): void {
-    const controller = this.GetUserFromController();
-    const netController = this.GetUserFromNetworkOwner();
-    const isLocalPlayer = !this.environment.isPlayback && !this.environment.isServer && controller === Players.LocalPlayer;
-    const isLocalBot = !this.environment.isPlayback && !this.environment.isServer && netController === Players.LocalPlayer;
-
-    const originalPosition = this.origin;
-
-    const originalHealth = this.health;
-    const originalMaxHealth = this.maxHealth;
-
-    super.ApplyStateBuffer(reader);
-
-    const pendingTeleport = reader.bool();
+  ApplyClientReplicationBuffer(reader: ReturnType<typeof BufferReader>): void {
+    const position = reader.vec();
+    const rotation = reader.vec();
+    const velocity = reader.vec();
     const grounded = reader.bool();
 
-    const teamIndex = reader.u8();
-    const controllerId = reader.string();
-    const appearanceId = reader.u64();
-    const kills = reader.u16();
-    const deaths = reader.u16();
-    const ping = reader.u16();
-    const damage = reader.u16();
-    const country = reader.string();
+    const requestedHorPosition = new Vector2(position.X, position.Z);
+    const originalHorPosition = new Vector2(this.position.X, this.position.Z);
+    const differenceMagnitute = originalHorPosition.sub(requestedHorPosition).Magnitude;
 
-    const isExploiter = reader.bool();
-    const isDegenerate = reader.bool();
-
-    const networkOwner = reader.string();
-
-    if (this.environment.isServer && !this.environment.isPlayback) {
-      const requestedHorPosition = new Vector2(this.origin.X, this.origin.Z);
-      const originalHorPosition = new Vector2(originalPosition.X, originalPosition.Z);
-      const differenceMagnitute = originalHorPosition.sub(requestedHorPosition).Magnitude;
-
+    if (this.pendingTeleport && differenceMagnitute <= positionDifferenceThreshold) {
       this.pendingTeleport = false;
-
-      if (differenceMagnitute > positionDifferenceThreshold) {
-        this.origin = originalPosition;
-        this.pendingTeleport = true;
-      }
-
-      this.health = originalHealth;
-      this.maxHealth = originalMaxHealth;
     }
 
-    // Client - Update position
-    if (!this.environment.isServer) {
-      // Hide player
-      if (!this.environment.isPlayback && !isLocalPlayer)
-        if (this.team === PlayerTeam.Spectators || this.health <= 0)
-          this.origin = new CFrame(0, -1000, 0);
-
-      if (isLocalPlayer && !pendingTeleport)
-        this.origin = originalPosition;
-
-      if (this.environment.isPlayback || (!isLocalPlayer && !isLocalBot) || (isLocalPlayer && pendingTeleport) || (isLocalBot && pendingTeleport))
-        this.TeleportTo(this.origin);
-    }
-
-    if (this.environment.isServer || this.environment.isPlayback)
-      this.grounded = grounded;
-    else
-      if (!isLocalPlayer && !isLocalBot)
-        this.grounded = grounded;
-
-    this.anchored = pendingTeleport;
-
-    if (this.environment.isPlayback || !this.environment.isServer) {
-      if (this.health !== originalHealth) {
-        if (this.health <= 0 && originalHealth > 0)
-          this.died.Fire();
-
-        if (this.health > 0 && originalHealth <= 0)
-          this.spawned.Fire(this.origin);
-      }
-
-      this.stats.kills = kills;
-      this.stats.deaths = deaths;
-      this.stats.ping = ping;
-      this.stats.damage = damage;
-      this.stats.country = country;
-
-      this.team = teamIndex;
-      this.controller = controllerId;
-      this.appearanceId = appearanceId;
-
-      this.caseInfo.isExploiter = isExploiter;
-      this.caseInfo.isDegenerate = isDegenerate;
-
-      this.networkOwner = networkOwner;
-
-      // Tween our playermodel
-      if (!this.environment.isServer && this.humanoidModel && DoesInstanceExist(this.humanoidModel.PrimaryPart) && (!isLocalBot && !isLocalPlayer)) {
-        const tweenId = `${this.environment.id}_${this.id}`;
-
-        let tween = activePlayermodelTweens.get(tweenId);
-
-        if (tween) {
-          const currentPosition = this.humanoidModel.GetPivot();
-
-          if (tween.PlaybackState === Enum.PlaybackState.Playing)
-            tween.Cancel();
-          tween.Destroy();
-          tween = undefined;
-
-          this.humanoidModel?.PivotTo(currentPosition);
-        }
-
-        tween = TweenService.Create(this.humanoidModel.PrimaryPart!, new TweenInfo(this.environment.lifecycle.tickrate, Enum.EasingStyle.Linear), { CFrame: this.origin });
-
-        activePlayermodelTweens.set(tweenId, tween);
-        tween.Play();
-      }
-    }
+    if (!this.pendingTeleport && !this.anchored)
+      this.position = position;
+    this.rotation = rotation;
+    this.velocity = velocity;
+    this.grounded = grounded;
   }
 
   Spawn(origin?: CFrame) {
@@ -416,14 +395,48 @@ export default class PlayerEntity extends HealthEntity {
     this.spawned.Fire(origin);
   }
 
-  TeleportTo(origin: CFrame) {
-    this.origin = origin;
-    this.pendingTeleport = true;
+  // Teleporting & tweening
+  private currentTween: Tween | undefined;
 
-    if (!this.environment.isServer && this.humanoidModel) {
-      this.humanoidModel.PivotTo(this.origin);
-      this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero;
+  TeleportTo(origin: CFrame) {
+    const controller = this.GetUserFromController();
+    const netController = this.GetUserFromNetworkOwner();
+    const isLocalPlayer = !this.environment.isPlayback && !this.environment.isServer && controller === Players.LocalPlayer;
+    const isLocalBot = !this.environment.isPlayback && !this.environment.isServer && netController === Players.LocalPlayer;
+
+    const CancelTween = () => {
+      if (this.environment.isServer || !this.humanoidModel) return;
+      if (!DoesInstanceExist(this.humanoidModel) || !DoesInstanceExist(this.humanoidModel.PrimaryPart)) return;
+
+      const currentPosition = this.humanoidModel.PrimaryPart.CFrame;
+
+      if (this.currentTween?.PlaybackState === Enum.PlaybackState.Playing)
+        this.currentTween?.Cancel();
+      this.currentTween?.Destroy();
+      this.currentTween = undefined;
+
+      this.humanoidModel.PrimaryPart.PivotTo(currentPosition);
+    };
+
+    if (!this.environment.isServer && DoesInstanceExist(this.humanoidModel)) {
+      const currentPosition = this.humanoidModel.PrimaryPart?.Position || this.position;
+      const direction = currentPosition.sub(origin.Position);
+
+      CancelTween();
+
+      if ((isLocalBot || isLocalPlayer) || direction.Magnitude > playermodelTweenPositionThreshold) {
+        this.humanoidModel.PivotTo(origin);
+        this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero;
+      } else {
+        this.currentTween = TweenService.Create(this.humanoidModel.PrimaryPart!, new TweenInfo(this.environment.lifecycle.tickrate, Enum.EasingStyle.Linear), { CFrame: this.ConvertOriginToCFrame() });
+        this.currentTween.Play();
+
+        this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = direction;
+      }
     }
+
+    this.position = origin.Position;
+    this.pendingTeleport = true;
   }
 
   takeDamage(amount: number, attacker?: import("./WorldEntity")): void {
