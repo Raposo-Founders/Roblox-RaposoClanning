@@ -35,6 +35,8 @@ function ResetCapturePoints(session: GameEnvironment) {
 
 function ResetPlayers(session: GameEnvironment) {
   for (const ent of session.entity.getEntitiesThatIsA("PlayerEntity")) {
+    ent.anchored = false;
+    ent.canDealDamage = true;
     ent.stats.kills = 0;
     ent.stats.deaths = 0;
     ent.stats.damage = 0;
@@ -107,25 +109,29 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     }
 
     for (const [teamIndex, points] of teamPoints) {
-      if (points >= targetPoints) {
-        isRunning = false;
+      if (points < targetPoints) continue;
+      isRunning = false;
 
-        const packet = new NetworkPacket("match_ended");
-        // writeBufferU32(targetPoints);
-        writeBufferU8(teamIndex);
-        writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
-        writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
-        env.network.SendPacket(packet);
+      const packet = new NetworkPacket("match_ended");
+      // writeBufferU32(targetPoints);
+      writeBufferU8(teamIndex);
+      writeBufferU32(teamPoints.get(PlayerTeam.Defenders) || 0);
+      writeBufferU32(teamPoints.get(PlayerTeam.Raiders) || 0);
+      env.network.SendPacket(packet);
 
-        webhookLogEvent(
-          teamIndex,
-          teamPoints.get(PlayerTeam.Defenders) || 0,
-          teamPoints.get(PlayerTeam.Raiders) || 0,
-          env.entity,
-        );
+      webhookLogEvent(
+        teamIndex,
+        teamPoints.get(PlayerTeam.Defenders) || 0,
+        teamPoints.get(PlayerTeam.Raiders) || 0,
+        env.entity,
+      );
 
-        break;
+      for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
+        ent.canDealDamage = false;
+        ent.anchored = true;
       }
+
+      break;
     }
   });
 
