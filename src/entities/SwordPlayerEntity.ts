@@ -10,6 +10,8 @@ import { registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
 import PlayerEntity, { getPlayerEntityFromController } from "./PlayerEntity";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
+import { SoundsPath, SoundSystem } from "systems/SoundSystem";
+import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Types
 declare global {
@@ -189,6 +191,14 @@ export class SwordPlayerEntity extends PlayerEntity {
     this.animator?.PlayAnimation("toollunge", "Action3", true);
     this.animator?.StopAnimation("toolslash");
 
+    if (this.humanoidModel && DoesInstanceExist(this.humanoidModel)) {
+      const sound = new SoundSystem.WorldSoundInstance();
+      sound.SetAssetPath(SoundsPath.Lunge);
+      sound.SetParent(this.humanoidModel.HumanoidRootPart);
+      sound.clearOnFinish = true;
+      sound.Play();
+    }
+
     task.wait(1);
 
     this.animator?.StopAnimation("toollunge");
@@ -198,6 +208,14 @@ export class SwordPlayerEntity extends PlayerEntity {
     if (!this.isEquipped) return;
     this.animator?.StopAnimation("toollunge");
     this.animator?.PlayAnimation("toolslash", "Action2", true);
+
+    if (this.humanoidModel && DoesInstanceExist(this.humanoidModel)) {
+      const sound = new SoundSystem.WorldSoundInstance();
+      sound.SetAssetPath(SoundsPath.Slash);
+      sound.SetParent(this.humanoidModel.HumanoidRootPart);
+      sound.clearOnFinish = true;
+      sound.Play();
+    }
   }
 
   AttackRequest(attackTime = time()) {
