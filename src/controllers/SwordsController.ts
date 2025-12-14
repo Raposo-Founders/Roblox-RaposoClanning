@@ -4,11 +4,9 @@ import GameEnvironment from "core/GameEnvironment";
 import { NetworkDataStreamer, NetworkPacket } from "core/NetworkModel";
 import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
-import { PlayerTeam } from "gamevalues";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import { modelsFolder } from "folders";
-import { getInstanceDefinedValue } from "gamevalues";
-import { RaposoConsole } from "logging";
+import { getInstanceDefinedValue, PlayerTeam } from "gamevalues";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
@@ -264,33 +262,35 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     const unbindLifecycleUpdate1 = env.lifecycle.BindLateUpdate(() => {
       if (!ent.humanoidModel || !DoesInstanceExist(ent.humanoidModel)) return;
 
+      const isLocalEntity = ent.GetUserFromController() === Players.LocalPlayer || ent.GetUserFromNetworkOwner() === Players.LocalPlayer;
       const isEquipped = ent.health > 0 && ent.isEquipped;
 
       swordMotor.C1 = getGripPosition();
       swordModel.Transparency = isEquipped ? 0 : 1;
 
-      // scan for hits
-      const existingHits = trackingEntityHits.get(ent.id) ?? new Set();
-      const partsInHitbox = GetPartsInSwordHitbox(ent, ent.humanoidModel["Right Arm"].CFrame);
-      const newHits = new Set<BasePart>();
+      if (isLocalEntity) {
+        const existingHits = trackingEntityHits.get(ent.id) ?? new Set();
+        const partsInHitbox = GetPartsInSwordHitbox(ent, ent.humanoidModel["Right Arm"].CFrame);
+        const newHits = new Set<BasePart>();
 
-      for (const part of partsInHitbox) {
-        if (existingHits.has(part)) continue;
-        existingHits.add(part);
-        newHits.add(part);
-        // RaposoConsole.Info(part.GetFullName());
+        for (const part of partsInHitbox) {
+          if (existingHits.has(part)) continue;
+          existingHits.add(part);
+          newHits.add(part);
+          // RaposoConsole.Info(part.GetFullName());
+        }
+
+        for (const oldHits of existingHits) {
+          if (partsInHitbox.includes(oldHits)) continue;
+          existingHits.delete(oldHits);
+        }
+
+        if (!trackingEntityHits.has(ent.id))
+          trackingEntityHits.set(ent.id, existingHits);
+
+        for (const hit of newHits)
+          touchedHandler(hit);
       }
-
-      for (const oldHits of existingHits) {
-        if (partsInHitbox.includes(oldHits)) continue;
-        existingHits.delete(oldHits);
-      }
-
-      if (!trackingEntityHits.has(ent.id))
-        trackingEntityHits.set(ent.id, existingHits);
-
-      for (const hit of newHits)
-        touchedHandler(hit);
     });
 
     ent.OnDelete(() => {
