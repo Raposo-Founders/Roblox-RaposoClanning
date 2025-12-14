@@ -1,12 +1,12 @@
-import { Players } from "@rbxts/services";
+import { Players, ReplicatedStorage } from "@rbxts/services";
 import { LifecycleContainer } from "core/GameLifecycle";
 import { EntityCompareSnapshotVersions, GetLatestClientAknowledgedSnapshot, GetSnapshotsFromEnvironmentId, ReadBufferEntityChanges, StoreEnvironmentSnapshot, WriteEntityBufferChanges } from "core/Snapshot";
 import { RaposoConsole } from "logging";
 import { EntityManager } from "../entities";
-import { gameValues } from "../gamevalues";
+import { Gamemode, gameValues } from "../gamevalues";
 import { writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
-import { RandomString } from "../util/utilfuncs";
+import { RandomString, ReplicatedInstance } from "../util/utilfuncs";
 import { NetworkDataStreamer, NetworkPacket, SendStandardMessage } from "./NetworkModel";
 
 // # Types
@@ -35,6 +35,12 @@ class GameEnvironment {
   readonly attributes = {
     totalTeamSize: 6,
     raidingGroupId: 0,
+
+    healingOnKill: false,
+    teamHealing: false,
+    forceTieTime: 0,
+
+    gamemode: Gamemode.Fairzone,
   };
 
   readonly network = new NetworkDataStreamer();
@@ -56,6 +62,15 @@ class GameEnvironment {
     });
 
     this.lifecycle.running = true;
+
+    // Attributes override
+    const attributesInstance = ReplicatedInstance(ReplicatedStorage, "EnvironmentOverride", "Configuration");
+    for (const [attribute, value] of attributesInstance.GetAttributes()) {
+      const keyofName = attribute as keyof typeof this.attributes;
+
+      if (typeOf(this.attributes[keyofName]) === typeOf(value))
+        rawset(this.attributes, keyofName, value);
+    }
 
     // Execute bindings
     for (const callback of GameEnvironment.boundCallbacks)

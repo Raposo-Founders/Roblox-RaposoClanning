@@ -6,7 +6,7 @@ import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import { modelsFolder } from "folders";
-import { getInstanceDefinedValue, PlayerTeam } from "gamevalues";
+import { PlayerTeam } from "gamevalues";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
@@ -23,9 +23,6 @@ const swordSize = new Vector3(1, 0.8, 4);
 const swordGripOffset = new CFrame(0, -1, -1.5).mul(CFrame.Angles(0, math.rad(180), math.rad(-90)));
 const swordLungeOffset = new CFrame(-1.5, 0, -1.5).mul(CFrame.Angles(0, -math.rad(90), 0));
 
-const forcetieEnabled = getInstanceDefinedValue("ForcetieEnabled", false);
-const teamHealingEnabled = getInstanceDefinedValue("TeamHealingEnabled", false);
-
 enum NetworkSwordHitIndex {
   LocalToOther,
   OtherToLocal,
@@ -37,14 +34,17 @@ function CheckPlayers<T extends BaseEntity>(entity1: SwordPlayerEntity, entity2:
   if (entity1.id === entity2.id) return;
   if (!entity2.IsA("HealthEntity")) return;
 
+  const forcetieTime = entity1.environment.attributes.forceTieTime;
+  const teamHealingEnabled = entity1.environment.attributes.teamHealing;
+
   if (entity2.IsA("PlayerEntity"))
-    if (entity1.team ===PlayerTeam.Spectators || entity2.team ===PlayerTeam.Spectators) return;
+    if (entity1.team ===PlayerTeam.Spectators || entity2.team === PlayerTeam.Spectators) return;
 
   if (entity1.health <= 0 || entity2.health <= 0) {
-    if (!forcetieEnabled) return;
+    if (forcetieTime <= 0) return;
 
     const lastAttacker = entity2.attackersList[0];
-    if (!lastAttacker || time() - lastAttacker.time > 0.25) return;
+    if (!lastAttacker || time() - lastAttacker.time > forcetieTime) return;
   }
 
   if (!teamHealingEnabled && entity2.IsA("PlayerEntity"))
@@ -171,7 +171,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     let totalDealingDamage = attackerEntity.currentState;
 
-    if (teamHealingEnabled && victimEntity.IsA("PlayerEntity"))
+    if (env.attributes.teamHealing && victimEntity.IsA("PlayerEntity"))
       if (victimEntity.team === attackerEntity.team)
         totalDealingDamage = -totalDealingDamage;
 
