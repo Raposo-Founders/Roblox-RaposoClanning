@@ -24,6 +24,14 @@ const positionDifferenceThreshold = 1;
 const playermodelTweenPositionThreshold = 5;
 const humanoidFetchDescriptionMaxAttempts = 5;
 
+const defaultHumanoidDescription = new Instance("HumanoidDescription");
+defaultHumanoidDescription.HeadColor = new Color3(1, 1, 1);
+defaultHumanoidDescription.TorsoColor = new Color3(1, 1, 1);
+defaultHumanoidDescription.LeftArmColor = new Color3(1, 1, 1);
+defaultHumanoidDescription.RightArmColor = new Color3(1, 1, 1);
+defaultHumanoidDescription.LeftLegColor = new Color3(1, 1, 1);
+defaultHumanoidDescription.RightLegColor = new Color3(1, 1, 1);
+
 // # Functions
 export async function fetchHumanoidDescription(userid: number) {
   userid = math.max(userid, 1);
@@ -59,13 +67,13 @@ export function getPlayerEntityFromController(environment: EntityManager, contro
 }
 
 function InsertEntityPlayermodel(entity: PlayerEntity) {
-  const humanoidModel = modelsFolder.WaitForChild("PlayerEntityHumanoidRig", 1)?.Clone() as CharacterModel | undefined;
+  const humanoidModel = Players.CreateHumanoidModelFromDescription(defaultHumanoidDescription, "R6", "Always") as CharacterModel;
   assert(humanoidModel, `No PlayerEntityHumanoidRig has been found on the models folder.`);
 
   humanoidModel.WaitForChild("HumanoidRootPart");
   humanoidModel.WaitForChild("Humanoid");
   humanoidModel.Humanoid.WaitForChild("Animator");
-  humanoidModel.WaitForChild("Torso");
+  humanoidModel.PrimaryPart = humanoidModel.WaitForChild("Torso") as BasePart;
 
   humanoidModel.Name = entity.id;
   humanoidModel.Parent = WorldProvider.ObjectsFolder;
@@ -88,7 +96,7 @@ function InsertEntityPlayermodel(entity: PlayerEntity) {
 
     fetchHumanoidDescription(controller.UserId).andThen(val => {
       if (!val) return;
-      entity.humanoidModel?.Humanoid.ApplyDescription(val);
+      entity.humanoidModel?.Humanoid.ApplyDescriptionReset(val);
     });
   };
 
