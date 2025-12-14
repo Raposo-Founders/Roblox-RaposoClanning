@@ -20,9 +20,9 @@ function PlayerEntry(props: { Entity: PlayerEntity }) {
   const connection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
     if (!GameEnvironment.GetDefaultEnvironment().entity.isEntityOnMemoryOrImSchizo(props.Entity)) return;
 
-    SetKillsAmount(props.Entity.stats.kills);
-    SetDeathsAmount(props.Entity.stats.deaths);
-    SetPingAmount(props.Entity.stats.ping);
+    SetKillsAmount(props.Entity.statsKills);
+    SetDeathsAmount(props.Entity.statsDeaths);
+    SetPingAmount(props.Entity.statsPing);
   });
 
   React.useEffect(() => {
@@ -42,7 +42,7 @@ function PlayerEntry(props: { Entity: PlayerEntity }) {
       Size={UDim2.fromScale(1, 1)}
     >
       <imagelabel // Flag
-        Image={countryFlags.get(props.Entity.stats.country)?.Decal ?? ""}
+        Image={countryFlags.get(props.Entity.statsCountry)?.Decal ?? ""}
         ScaleType={"Fit"}
         AnchorPoint={new Vector2(0.5, 0.5)}
         BackgroundTransparency={1}

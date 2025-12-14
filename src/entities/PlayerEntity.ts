@@ -1,17 +1,16 @@
 import { Debris, Players, RunService, TweenService } from "@rbxts/services";
 import { modelsFolder } from "folders";
 import { gameValues, PlayerTeam } from "gamevalues";
+import { RaposoConsole } from "logging";
+import { createHealthBarForEntity } from "providers/healthbar";
+import { CharacterAnimationManager, PlayermodelRigManager } from "providers/PlayermodelRigManager";
 import WorldProvider from "providers/WorldProvider";
+import { colorTable } from "UI/values";
 import { BufferReader } from "util/bufferreader";
-import { BufferByteType, writeBufferBool, writeBufferI16, writeBufferString, writeBufferU16, writeBufferU64, writeBufferU8, writeBufferVector } from "util/bufferwriter";
-import Signal from "util/signal";
+import { BufferByteType, writeBufferBool, writeBufferVector } from "util/bufferwriter";
+import { DoesInstanceExist } from "util/utilfuncs";
 import { EntityManager, registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
-import { DoesInstanceExist } from "util/utilfuncs";
-import { CharacterAnimationManager, PlayermodelRigManager } from "providers/PlayermodelRigManager";
-import { colorTable } from "UI/values";
-import { createHealthBarForEntity } from "providers/healthbar";
-import { RaposoConsole } from "logging";
 
 // # Types
 declare global {
@@ -21,8 +20,6 @@ declare global {
 }
 
 // # Constants & variables
-const activePlayermodelTweens = new Map<string, Tween>();
-
 const positionDifferenceThreshold = 1;
 const playermodelTweenPositionThreshold = 5;
 const humanoidFetchDescriptionMaxAttempts = 5;
@@ -206,18 +203,14 @@ export default class PlayerEntity extends HealthEntity {
   controller = "";
   appearanceId = 1;
 
-  caseInfo = {
-    isExploiter: false,
-    isDegenerate: false,
-  };
+  isExploiter = false;
+  isDegenerate = false;
 
-  stats = {
-    kills: 0,
-    deaths: 0,
-    ping: 0,
-    damage: 0,
-    country: "US",
-  };
+  statsKills = 0;
+  statsDeaths = 0;
+  statsPing = 0;
+  statsDamage = 0;
+  statsCountry = "US";
 
   constructor() {
     super();
@@ -236,6 +229,15 @@ export default class PlayerEntity extends HealthEntity {
     this.RegisterNetworkableProperty("pendingTeleport", BufferByteType.bool);
     this.RegisterNetworkableProperty("grounded", BufferByteType.bool);
     this.RegisterNetworkableProperty("anchored", BufferByteType.bool);
+
+    this.RegisterNetworkableProperty("statsKills", BufferByteType.i16);
+    this.RegisterNetworkableProperty("statsDeaths", BufferByteType.i16);
+    this.RegisterNetworkableProperty("statsPing", BufferByteType.i16);
+    this.RegisterNetworkableProperty("statsDamage", BufferByteType.i16);
+    this.RegisterNetworkableProperty("statsCountry", BufferByteType.str);
+
+    this.RegisterNetworkableProperty("isExploiter", BufferByteType.bool);
+    this.RegisterNetworkableProperty("isDegenerate", BufferByteType.bool);
 
     this.RegisterNetworkablePropertyHandler("grounded", (ctx, val) => {
       if (this.environment.isServer) return;
@@ -445,14 +447,14 @@ export default class PlayerEntity extends HealthEntity {
     super.takeDamage(amount, attacker);
 
     if (attacker?.IsA("PlayerEntity") && amount > 0)
-      attacker.stats.damage += amount;
+      attacker.statsDamage += amount;
 
     if (this.health <= 0) {
       this.canDealDamage = false;
-      this.stats.deaths++;
+      this.statsDeaths++;
 
       if (attacker?.IsA("PlayerEntity"))
-        attacker.stats.kills++;
+        attacker.statsKills++;
     }
   }
 

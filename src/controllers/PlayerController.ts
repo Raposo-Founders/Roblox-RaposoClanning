@@ -66,19 +66,19 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
         ent.Spawn();
       });
 
-      ent.stats.country = LocalizationService.GetCountryRegionForPlayerAsync(user);
+      ent.statsCountry = LocalizationService.GetCountryRegionForPlayerAsync(user);
 
       if (user.UserId === 3676469645) // Hide coolergate's true identity
-        ent.stats.country = "RU";
+        ent.statsCountry = "RU";
 
       if (user.UserId === 225338142) // Codester's shit
-        ent.stats.country = "CA";
+        ent.statsCountry = "CA";
 
       if (user.UserId === 3754176167) // Ray's shit
-        ent.stats.country = "UA";
+        ent.statsCountry = "UA";
 
-      ent.caseInfo.isDegenerate = listedInfo.degenerate;
-      ent.caseInfo.isExploiter = listedInfo.exploiter;
+      ent.isDegenerate = listedInfo.degenerate;
+      ent.isExploiter = listedInfo.exploiter;
 
       sendSystemMessage(`${listedInfo.degenerate ? "(DGN) " : ""}${listedInfo.exploiter ? "(XPL) " : ""}${user.Name} has joined the game.`);
 
@@ -108,10 +108,10 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       const controller = user.GetUserFromController();
       if (!controller) continue;
 
-      user.stats.ping = math.floor(controller.GetNetworkPing() * 1000);
+      user.statsPing = math.floor(controller.GetNetworkPing() * 1000);
 
       if (controller.UserId === 3676469645)
-        user.stats.ping = 999; // Hide coolergate's true ping
+        user.statsPing = 999; // Hide coolergate's true ping
     }
   });
 });

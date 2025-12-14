@@ -39,7 +39,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     }
     const targetController = targetEntity.GetUserFromController();
 
-    if (team !== PlayerTeam.Spectators && (targetEntity.caseInfo.isDegenerate || targetEntity.caseInfo.isExploiter)) {
+    if (team !== PlayerTeam.Spectators && (targetEntity.isDegenerate || targetEntity.isExploiter)) {
       ChatSystem.sendSystemMessage(`Unable to team player: ${targetController?.Name} is listed on Clanware.`);
       return;
     }

@@ -44,10 +44,10 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
     const controller = entity.GetUserFromController();
 
     SetUsername(controller ? controller.Name : entity.id);
-    SetKills(entity.stats.kills);
-    SetDeaths(entity.stats.deaths);
-    SetPing(entity.stats.ping);
-    SetFlag(countryFlags.get(entity.stats.country)?.Decal ?? "");
+    SetKills(entity.statsKills);
+    SetDeaths(entity.statsDeaths);
+    SetPing(entity.statsPing);
+    SetFlag(countryFlags.get(entity.statsCountry)?.Decal ?? "");
 
     {
       let teamColor = colorTable.spectatorsColor;
@@ -349,7 +349,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
       const entitiesList = getPlayersFromTeam(GameEnvironment.GetDefaultEnvironment().entity, PlayerTeam[props.team]);
 
       entitiesList.sort((a, b) => {
-        return a.stats.kills > b.stats.kills;
+        return a.statsKills > b.statsKills;
       });
 
       // Unmount the entire thing if it isn't equal to the current team size
@@ -387,7 +387,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
 
 
         uiEntryInfo.setEntityId(targetPlayer.id);
-        uiEntryInfo.setLayoutOrder(math.max(targetPlayer.stats.kills, 1) * (props.team === "Defenders" ? -1 : 1));
+        uiEntryInfo.setLayoutOrder(math.max(targetPlayer.statsKills, 1) * (props.team === "Defenders" ? -1 : 1));
       }
       GameEnvironment.GetDefaultEnvironment().lifecycle.YieldForTicks(2);
     }

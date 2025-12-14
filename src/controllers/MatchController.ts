@@ -37,9 +37,9 @@ function ResetPlayers(session: GameEnvironment) {
   for (const ent of session.entity.getEntitiesThatIsA("PlayerEntity")) {
     ent.anchored = false;
     ent.canDealDamage = true;
-    ent.stats.kills = 0;
-    ent.stats.deaths = 0;
-    ent.stats.damage = 0;
+    ent.statsKills = 0;
+    ent.statsDeaths = 0;
+    ent.statsDamage = 0;
     ent.Spawn();
   }
 }

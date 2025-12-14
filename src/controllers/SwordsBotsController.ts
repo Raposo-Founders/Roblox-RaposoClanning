@@ -83,7 +83,7 @@ function ShouldAdvance(entity: SwordPlayerEntity, target: PlayerEntity) {
 
   const movingTowardsUs = IsPlayerMovingTo(target, inverseDirection);
   const facingTowardsUs = IsEntityFacingTo(target, currentPosition);
-  const belowLatencyThreshold = distance <= CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.stats.ping);
+  const belowLatencyThreshold = distance <= CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.statsPing);
 
   const possibleBait = movingTowardsUs && !facingTowardsUs;
   const healthAdvantage = math.abs(entity.health - target.health) >= SwordState.Lunge && entity.health > target.health;
@@ -142,7 +142,7 @@ function CalculateMovement(entity: SwordPlayerEntity, target: WorldEntity) {
   let willJump = false;
 
   if (target.IsA("PlayerEntity")) {
-    const latencyThresholdDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.stats.ping);
+    const latencyThresholdDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.statsPing);
 
     const movingTowardsUs = IsPlayerMovingTo(target, inverseDirection);
     const facingTowardsUs = IsEntityFacingTo(target, currentPosition);
@@ -196,7 +196,7 @@ function CalculateLookDirection(entity: PlayerEntity, target?: WorldEntity) {
   let finalRotation = math.lerp(rotY, dirY, 0.1);
 
   const distance = position.sub(targetPosition).Magnitude;
-  const latencyDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.IsA("PlayerEntity") ? target.stats.ping : 0);
+  const latencyDistance = CalculateDistanceFromLatency(THRESHOLD_DISTANCE, target.IsA("PlayerEntity") ? target.statsPing : 0);
 
   // The... wiggle...
   if (target.IsA("PlayerEntity") && distance <= latencyDistance)

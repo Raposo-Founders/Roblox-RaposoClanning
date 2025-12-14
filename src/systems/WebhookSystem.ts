@@ -19,7 +19,7 @@ export function webhookLogEvent(winningTeam: PlayerTeam, defendersScore: number,
 
   const scoresText = `Score: ${math.max(defendersScore, raidersScore)} - ${math.min(defendersScore, raidersScore)} | ${math.floor(math.abs(defendersScore - raidersScore))} points difference.`;
 
-  defendingPlayers.sort((a, b) => a.stats.kills > b.stats.kills);
+  defendingPlayers.sort((a, b) => a.statsKills > b.statsKills);
 
   for (const ent of defendingPlayers) {
     const controller = ent.GetUserFromController();
@@ -28,7 +28,7 @@ export function webhookLogEvent(winningTeam: PlayerTeam, defendersScore: number,
       finalDefendingPlayersText = `${finalDefendingPlayersText}\n`;
 
     finalDefendingPlayersText = `${finalDefendingPlayersText}- ${controller?.Name} (${controller ? controller.UserId : "BOT"})`;
-    finalDefendingPlayersText = `${finalDefendingPlayersText} | K: ${ent.stats.kills} | D: ${ent.stats.deaths} | R: ${math.floor((ent.stats.kills / ent.stats.deaths) * 100) * 0.01}`;
+    finalDefendingPlayersText = `${finalDefendingPlayersText} | K: ${ent.statsKills} | D: ${ent.statsDeaths} | R: ${math.floor((ent.statsKills / ent.statsDeaths) * 100) * 0.01}`;
   }
 
   for (const ent of raidingPlayers) {
@@ -38,7 +38,7 @@ export function webhookLogEvent(winningTeam: PlayerTeam, defendersScore: number,
       finalRaidingPlayersText = `${finalRaidingPlayersText}\n`;
 
     finalRaidingPlayersText = `${finalRaidingPlayersText}- ${controller?.Name} (${controller ? controller.UserId : "BOT"})`;
-    finalRaidingPlayersText = `${finalRaidingPlayersText} | K: ${ent.stats.kills} | D: ${ent.stats.deaths} | R: ${math.floor((ent.stats.kills / ent.stats.deaths) * 100) * 0.01}`;
+    finalRaidingPlayersText = `${finalRaidingPlayersText} | K: ${ent.statsKills} | D: ${ent.statsDeaths} | R: ${math.floor((ent.statsKills / ent.statsDeaths) * 100) * 0.01}`;
   }
 
   const defendersEmbed = new DiscordEmbed()

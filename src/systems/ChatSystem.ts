@@ -101,7 +101,7 @@ if (RunService.IsClient()) {
       }
 
       let isListed = false;
-      
+
       if (entity) {
         switch (entity.team) {
         case PlayerTeam.Defenders:
@@ -115,7 +115,7 @@ if (RunService.IsClient()) {
           break;
         }
 
-        isListed = entity.caseInfo.isDegenerate || entity.caseInfo.isExploiter;
+        isListed = entity.isDegenerate || entity.isExploiter;
       }
 
       finalPrefix = `${finalPrefix}${isListed ? `<font color="#ff0000">[LISTED]</font> ` : ""}`;

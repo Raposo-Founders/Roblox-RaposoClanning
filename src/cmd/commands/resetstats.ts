@@ -46,9 +46,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       return;
     }
 
-    targetEntity.stats.kills = 0;
-    targetEntity.stats.damage = 0;
-    targetEntity.stats.deaths = 0;
+    targetEntity.statsKills = 0;
+    targetEntity.statsDamage = 0;
+    targetEntity.statsDeaths = 0;
 
     ChatSystem.sendSystemMessage(`Reset ${targetEntity.GetUserFromController()}'s (${targetEntity.id}) stats.`); // All players
   });
