@@ -28,12 +28,14 @@ export enum PlayerTeam {
 export enum Gamemode {
   Lanes,
   Payload,
-  Fairzone,
+  BombRush,
   Hardpoint,
   FreezeTag,
   Sacrifice,
   FreeForAll,
+  BombDefusal,
   KingOfTheHill,
   TeamDeathmatch,
   CaptureTheFlag,
+  FlagDomination,
 }
