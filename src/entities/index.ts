@@ -47,6 +47,7 @@ export function requireEntities() {
 // # Class
 export class EntityManager {
   readonly entities = new Map<EntityId, BaseEntity>();
+  readonly namedEntities = new Map<string, BaseEntity>();
   readonly entityCreated = new Signal<[Entity: BaseEntity]>();
   readonly entityDeleting = new Signal<[Entity: BaseEntity]>();
 
