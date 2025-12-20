@@ -40,7 +40,7 @@ class GameEnvironment {
     teamHealing: false,
     forceTieTime: 0,
 
-    gamemode: Gamemode.Fairzone,
+    gamemode: Gamemode.KingOfTheHill,
   };
 
   readonly network = new NetworkDataStreamer();
