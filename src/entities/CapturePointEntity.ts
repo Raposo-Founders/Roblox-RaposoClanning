@@ -43,6 +43,8 @@ export default class CapturePointEntity extends WorldEntity {
   capture_speed = 2.5;
   is_instant_cap = false;
 
+  linkedTrigger: EntityId = "";
+
   constructor() {
     super();
     this.inheritanceList.add("CapturePointEntity");
@@ -56,13 +58,16 @@ export default class CapturePointEntity extends WorldEntity {
   Think(dt: number): void {
     this.UpdateCaptureProgress(dt);
   }
-  
+
   UpdateCaptureProgress(dt: number) {
     let total_capture_multiplier = 0;
 
-    for (const ent of this.GetPlayersOnHitbox()) {
-      total_capture_multiplier += ent.team === PlayerTeam.Defenders ? 1 : -1;
-    }
+    const triggerEntity = this.environment.entity.entities.get(this.linkedTrigger) || this.environment.entity.namedEntities.get(this.linkedTrigger);
+    if (triggerEntity?.IsA("TriggerEntity"))
+      for (const ent of triggerEntity.GetEntitiesInZone()) {
+        if (!ent.IsA("PlayerEntity")) continue;
+        total_capture_multiplier += ent.team === PlayerTeam.Defenders ? 1 : -1;
+      }
 
     this.capture_progress = math.clamp(this.capture_progress + ((this.capture_speed * total_capture_multiplier) * dt), -1, 1);
 
