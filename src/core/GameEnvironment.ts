@@ -9,6 +9,8 @@ import Signal from "../util/signal";
 import { RandomString, ReplicatedInstance } from "../util/utilfuncs";
 import { NetworkDataStreamer, NetworkPacket, SendStandardMessage } from "./NetworkModel";
 import BaseEntity from "entities/BaseEntity";
+import { UTIL_MATH_ConvertCFrameToVector3 } from "util/math";
+import { t } from "@rbxts/t";
 
 // # Types
 type T_EnvironmentBinding = (env: GameEnvironment) => void;
@@ -72,6 +74,44 @@ class GameEnvironment {
       if (typeOf(this.attributes[keyofName]) === typeOf(value))
         rawset(this.attributes, keyofName, value);
     }
+
+    // Spawn map entities
+    if (isServer)
+      for (const obj of CollectionService.GetTagged(gameValues.objtag)) {
+        const classnameAttribute = obj.GetAttribute("classname");
+        if (!classnameAttribute) {
+          RaposoConsole.Warn(`${obj.GetFullName()} is missing the classname attribute.`);
+          continue;
+        }
+        if (!t.string(classnameAttribute)) {
+          RaposoConsole.Warn(`The classname attribute from ${obj.GetFullName()} must be a string.`);
+          continue;
+        }
+
+        this.entity.CreateEntityByName(classnameAttribute as keyof GameEntities).andThen(ent => {
+          ent.SetName(obj.Name);
+
+          if (obj.IsA("BasePart") && ent.IsA("WorldEntity")) {
+            const converted = UTIL_MATH_ConvertCFrameToVector3(obj.CFrame);
+            ent.position = converted.position;
+            ent.rotation = converted.rotation;
+            ent.size = obj.Size;
+          }
+
+          for (const [name, value] of obj.GetAttributes()) {
+            if (name === "classname") continue;
+
+            const existingValue = rawget(ent, name);
+            if (existingValue === undefined) continue;
+            if (typeOf(existingValue) !== typeOf(value)) {
+              RaposoConsole.Warn(`Attribute ${name} on ${obj.GetFullName()} must be a ${typeOf(existingValue)}.`);
+              continue;
+            }
+
+            rawset(ent, name, value);
+          }
+        });
+      }
 
     // Execute bindings
     for (const callback of GameEnvironment.boundCallbacks)
