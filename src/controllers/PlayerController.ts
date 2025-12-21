@@ -21,98 +21,109 @@ const ADMIN_ROLES: string[] = [
 ] as const;
 
 // # Functions
-function FormatPlayerEntityName(userId: number) {
-  return string.format("PlayerEntity_%i", userId);
+function FormatPlayerEntityName( userId: number ) 
+{
+  return string.format( "PlayerEntity_%i", userId );
 }
 
-export function getPlayersFromTeam(environment: T_EntityEnvironment, team: PlayerTeam) {
+export function getPlayersFromTeam( environment: T_EntityEnvironment, team: PlayerTeam ) 
+{
   const foundPlayers: PlayerEntity[] = [];
 
-  for (const ent of environment.getEntitiesThatIsA("PlayerEntity")) {
-    if (ent.team !== team) continue;
-    foundPlayers.push(ent);
+  for ( const ent of environment.getEntitiesThatIsA( "PlayerEntity" ) ) 
+  {
+    if ( ent.team !== team ) continue;
+    foundPlayers.push( ent );
   }
 
   return foundPlayers;
 }
 
 // # Execution
-GameEnvironment.BindCallbackToEnvironmentCreation(env => {
-  if (!env.isServer) return;
+GameEnvironment.BindCallbackToEnvironmentCreation( env => 
+{
+  if ( !env.isServer ) return;
 
-  env.playerJoined.Connect((user, referenceId) => {
-    user.SetAttribute(gameValues.adminattr, ADMIN_ROLES.includes(user.GetRoleInGroup(TARGET_GROUP).upper()) || RunService.IsStudio());
-    user.SetAttribute(gameValues.modattr, user.GetAttribute(gameValues.adminattr));
+  env.playerJoined.Connect( ( user, referenceId ) => 
+  {
+    user.SetAttribute( gameValues.adminattr, ADMIN_ROLES.includes( user.GetRoleInGroup( TARGET_GROUP ).upper() ) || RunService.IsStudio() );
+    user.SetAttribute( gameValues.modattr, user.GetAttribute( gameValues.adminattr ) );
 
-    const listedInfo = ClanwareCaseSystem.IsUserListed(user.UserId);
+    const listedInfo = ClanwareCaseSystem.IsUserListed( user.UserId );
 
-    env.entity.CreateEntityByName("SwordPlayerEntity").andThen(ent => {
-      ent.SetName(FormatPlayerEntityName(user.UserId));
+    env.entity.CreateEntityByName( "SwordPlayerEntity" ).andThen( ent => 
+    {
+      ent.SetName( FormatPlayerEntityName( user.UserId ) );
       ent.controller = referenceId;
       ent.appearanceId = user.UserId;
 
-      ent.died.Connect(attacker => {
+      ent.died.Connect( attacker => 
+      {
 
-        if (attacker?.IsA("PlayerEntity")) {
-          const distance = ent.position.sub(attacker.position).Magnitude;
+        if ( attacker?.IsA( "PlayerEntity" ) ) 
+        {
+          const distance = ent.position.sub( attacker.position ).Magnitude;
 
-          const packet = new NetworkPacket("game_killfeed");
-          writeBufferF32(distance);
-          writeBufferU16(attacker.id);
-          writeBufferU16(ent.id);
-          env.network.SendPacket(packet);
+          const packet = new NetworkPacket( "game_killfeed" );
+          writeBufferF32( distance );
+          writeBufferU16( attacker.id );
+          writeBufferU16( ent.id );
+          env.network.SendPacket( packet );
         }
 
-        task.wait(Players.RespawnTime);
+        task.wait( Players.RespawnTime );
         ent.Spawn();
-      });
+      } );
 
-      ent.statsCountry = LocalizationService.GetCountryRegionForPlayerAsync(user);
+      ent.statsCountry = LocalizationService.GetCountryRegionForPlayerAsync( user );
 
-      if (user.UserId === 3676469645) // Hide coolergate's true identity
+      if ( user.UserId === 3676469645 ) // Hide coolergate's true identity
         ent.statsCountry = "RU";
 
-      if (user.UserId === 225338142) // Codester's shit
+      if ( user.UserId === 225338142 ) // Codester's shit
         ent.statsCountry = "CA";
 
-      if (user.UserId === 3754176167) // Ray's shit
+      if ( user.UserId === 3754176167 ) // Ray's shit
         ent.statsCountry = "UA";
 
       ent.isDegenerate = listedInfo.degenerate;
       ent.isExploiter = listedInfo.exploiter;
 
-      sendSystemMessage(`${listedInfo.degenerate ? "(DGN) " : ""}${listedInfo.exploiter ? "(XPL) " : ""}${user.Name} has joined the game.`);
+      sendSystemMessage( `${listedInfo.degenerate ? "(DGN) " : ""}${listedInfo.exploiter ? "(XPL) " : ""}${user.Name} has joined the game.` );
 
-      task.wait(2);
+      task.wait( 2 );
 
       ent.Spawn();
-    });
-  });
+    } );
+  } );
 
-  env.playerLeft.Connect(user => {
-    sendSystemMessage(`${user.Name} has left the game.`);
+  env.playerLeft.Connect( user => 
+  {
+    sendSystemMessage( `${user.Name} has left the game.` );
 
-    const targetEntity = env.entity.namedEntities.get(FormatPlayerEntityName(user.UserId));
-    if (!targetEntity?.IsA("PlayerEntity")) return;
+    const targetEntity = env.entity.namedEntities.get( FormatPlayerEntityName( user.UserId ) );
+    if ( !targetEntity?.IsA( "PlayerEntity" ) ) return;
 
-    env.entity.killThisFucker(targetEntity);
-  });
+    env.entity.killThisFucker( targetEntity );
+  } );
 
   // Update players ping
   let nextPingUpdateTime = 0;
-  env.lifecycle.BindTickrate(() => {
+  env.lifecycle.BindTickrate( () => 
+  {
     const currentTime = time();
-    if (currentTime < nextPingUpdateTime) return;
+    if ( currentTime < nextPingUpdateTime ) return;
     nextPingUpdateTime = currentTime + 1;
 
-    for (const user of env.entity.getEntitiesThatIsA("PlayerEntity")) {
+    for ( const user of env.entity.getEntitiesThatIsA( "PlayerEntity" ) ) 
+    {
       const controller = user.GetUserFromController();
-      if (!controller) continue;
+      if ( !controller ) continue;
 
-      user.statsPing = math.floor(controller.GetNetworkPing() * 1000);
+      user.statsPing = math.floor( controller.GetNetworkPing() * 1000 );
 
-      if (controller.UserId === 3676469645)
+      if ( controller.UserId === 3676469645 )
         user.statsPing = 999; // Hide coolergate's true ping
     }
-  });
-});
+  } );
+} );

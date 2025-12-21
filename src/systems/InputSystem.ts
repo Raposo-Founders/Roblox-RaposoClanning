@@ -19,54 +19,61 @@ const actionBoundKeys = new Map<InputKeys, Set<string>>();
 
 // # Namespace
 export namespace InputSystem {
-  export function RegisterAction(name: string, onActivate: Callback, onDeactivate?: Callback) {
-    registeredActions.set(name, { onActivate, onDeactivate });
+  export function RegisterAction( name: string, onActivate: Callback, onDeactivate?: Callback ) 
+  {
+    registeredActions.set( name, { onActivate, onDeactivate } );
   }
 
-  export function BindKeyToAction(keycode: InputKeys, action: string) {
-    const existingList = actionBoundKeys.get(keycode) || new Set();
-    existingList.add(action);
+  export function BindKeyToAction( keycode: InputKeys, action: string ) 
+  {
+    const existingList = actionBoundKeys.get( keycode ) || new Set();
+    existingList.add( action );
 
-    if (!actionBoundKeys.has(keycode))
-      actionBoundKeys.set(keycode, existingList);
+    if ( !actionBoundKeys.has( keycode ) )
+      actionBoundKeys.set( keycode, existingList );
 
-    RaposoConsole.Info("Bound key", keycode, "to:", action);
+    RaposoConsole.Info( "Bound key", keycode, "to:", action );
   }
 }
 
 // # Bindings & misc
-if (RunService.IsClient()) {
-  UserInputService.InputBegan.Connect((input, busy) => {
-    if (busy) return;
+if ( RunService.IsClient() ) 
+{
+  UserInputService.InputBegan.Connect( ( input, busy ) => 
+  {
+    if ( busy ) return;
 
     const name = input.KeyCode.Name !== "Unknown" ? input.KeyCode.Name : input.UserInputType.Name;
-    const boundActions = actionBoundKeys.get(name);
+    const boundActions = actionBoundKeys.get( name );
 
-    if (!boundActions) return;
+    if ( !boundActions ) return;
 
-    for (const actionName of boundActions) {
-      const actionInfo = registeredActions.get(actionName);
+    for ( const actionName of boundActions ) 
+    {
+      const actionInfo = registeredActions.get( actionName );
       actionInfo?.onActivate();
 
-      if (!actionInfo)
-        ExecuteCommand(actionName,GameEnvironment.GetDefaultEnvironment());
+      if ( !actionInfo )
+        ExecuteCommand( actionName,GameEnvironment.GetDefaultEnvironment() );
     }
-  });
+  } );
 
-  UserInputService.InputEnded.Connect((input, busy) => {
-    if (busy) return;
+  UserInputService.InputEnded.Connect( ( input, busy ) => 
+  {
+    if ( busy ) return;
 
     const name = input.KeyCode.Name !== "Unknown" ? input.KeyCode.Name : input.UserInputType.Name;
-    const boundActions = actionBoundKeys.get(name);
+    const boundActions = actionBoundKeys.get( name );
 
-    if (!boundActions) return;
+    if ( !boundActions ) return;
 
-    for (const actionName of boundActions) {
-      const actionInfo = registeredActions.get(actionName);
+    for ( const actionName of boundActions ) 
+    {
+      const actionInfo = registeredActions.get( actionName );
       actionInfo?.onDeactivate?.();
 
-      if (!actionInfo)
-        ExecuteCommand(actionName,GameEnvironment.GetDefaultEnvironment());
+      if ( !actionInfo )
+        ExecuteCommand( actionName,GameEnvironment.GetDefaultEnvironment() );
     }
-  });
+  } );
 }

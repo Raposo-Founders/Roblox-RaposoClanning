@@ -11,7 +11,8 @@ interface DefaultButtonProps {
   Visible?: boolean | React.Binding<boolean>;
 }
 
-export function DefaultButton(props: DefaultButtonProps) {
+export function DefaultButton( props: DefaultButtonProps ) 
+{
   return (
     <textbutton
       AnchorPoint={props.AnchorPoint}
@@ -21,7 +22,7 @@ export function DefaultButton(props: DefaultButtonProps) {
         Enum.FontStyle.Normal
       )}
       Text={props.Text}
-      TextColor3={props.Color.map(val => ColorUtils.Darken(val, 0.75))}
+      TextColor3={props.Color.map( val => ColorUtils.Darken( val, 0.75 ) )}
       TextScaled={true}
       BackgroundColor3={props.Color}
       Position={props.Position}
@@ -32,14 +33,14 @@ export function DefaultButton(props: DefaultButtonProps) {
       Visible={props.Visible}
     >
       <uicorner
-        CornerRadius={new UDim(0, 12)}
+        CornerRadius={new UDim( 0, 12 )}
       />
 
       <uipadding
-        PaddingBottom={new UDim(0.15, 0)}
-        PaddingLeft={new UDim(0.15, 0)}
-        PaddingRight={new UDim(0.15, 0)}
-        PaddingTop={new UDim(0.15, 0)}
+        PaddingBottom={new UDim( 0.15, 0 )}
+        PaddingLeft={new UDim( 0.15, 0 )}
+        PaddingRight={new UDim( 0.15, 0 )}
+        PaddingTop={new UDim( 0.15, 0 )}
       />
     </textbutton>
   );

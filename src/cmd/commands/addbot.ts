@@ -14,57 +14,65 @@ const CMD_INDEX_NAME = "cmd_addbot";
 // # Functions
 
 // # Bindings & misc
-new ConsoleFunctionCallback(["addbot"], [{ name: "name", type: "string" }])
-  .setCallback(ctx => {
-    const entityName = ctx.getArgument("name", "string");
+new ConsoleFunctionCallback( ["addbot"], [{ name: "name", type: "string" }] )
+  .setCallback( ctx => 
+  {
+    const entityName = ctx.getArgument( "name", "string" );
 
-    const packet = new NetworkPacket(CMD_INDEX_NAME);
-    writeBufferString(entityName.value);
-    ctx.env.network.SendPacket(packet);
-  });
+    const packet = new NetworkPacket( CMD_INDEX_NAME );
+    writeBufferString( entityName.value );
+    ctx.env.network.SendPacket( packet );
+  } );
 
-GameEnvironment.BindCallbackToEnvironmentCreation(env => {
-  if (!env.isServer) return;
+GameEnvironment.BindCallbackToEnvironmentCreation( env => 
+{
+  if ( !env.isServer ) return;
 
-  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
-    if (!sender) return;
+  env.network.ListenPacket( CMD_INDEX_NAME, ( sender, reader ) => 
+  {
+    if ( !sender ) return;
 
     const entityName = reader.string();
 
-    const sessionList = GameEnvironment.GetServersFromPlayer(sender);
+    const sessionList = GameEnvironment.GetServersFromPlayer( sender );
 
-    for (const session of sessionList) {
+    for ( const session of sessionList ) 
+    {
       let callerEntity: PlayerEntity | undefined;
-      for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
-        if (ent.GetUserFromController() !== sender) continue;
+      for ( const ent of env.entity.getEntitiesThatIsA( "PlayerEntity" ) ) 
+      {
+        if ( ent.GetUserFromController() !== sender ) continue;
         callerEntity = ent;
         break;
       }
-      if (!callerEntity) continue;
+      if ( !callerEntity ) continue;
 
-      session.entity.CreateEntityByName("SwordPlayerEntity")
-        .andThen(ent => {
-          ent.SetName(`bot_${entityName}`);
+      session.entity.CreateEntityByName( "SwordPlayerEntity" )
+        .andThen( ent => 
+        {
+          ent.SetName( `bot_${entityName}` );
           ent.appearanceId = sender.UserId;
           ent.team = PlayerTeam.Raiders;
-          ent.networkOwner = tostring(sender!.GetAttribute(gameValues.usersessionid));
+          ent.networkOwner = tostring( sender!.GetAttribute( gameValues.usersessionid ) );
 
-          session.lifecycle.BindTickrate((ctx, val) => {
-            if (ent.team === PlayerTeam.Spectators || ent.health <= 0) return;
-            if (!ent.isEquipped) return;
+          session.lifecycle.BindTickrate( ( ctx, val ) => 
+          {
+            if ( ent.team === PlayerTeam.Spectators || ent.health <= 0 ) return;
+            if ( !ent.isEquipped ) return;
 
             ent.AttackRequest();
-          });
+          } );
 
-          ent.died.Connect(() => {
-            task.wait(Players.RespawnTime);
+          ent.died.Connect( () => 
+          {
+            task.wait( Players.RespawnTime );
             ent.Spawn();
-          });
+          } );
 
           ent.Spawn();
 
-          ChatSystem.sendSystemMessage(`Spawned bot ${ent.id}.`);
-        });
+          ChatSystem.sendSystemMessage( `Spawned bot ${ent.id}.` );
+        } );
     }
-  });
-}); 
+  } );
+} ); 

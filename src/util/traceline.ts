@@ -18,24 +18,26 @@ declare global {
 const TRACELINE_DEF_DIST = 10e8;
 
 // # Functions
-export function validadeTraceline(data: object): data is TracelineResult {
-  return t.interface({
+export function validadeTraceline( data: object ): data is TracelineResult 
+{
+  return t.interface( {
     origin: t.Vector3,
     target: t.Vector3,
-    hitVec: t.optional(t.Vector3),
+    hitVec: t.optional( t.Vector3 ),
 
     distance: t.number,
     direction: t.Vector3,
     normalFace: t.Vector3,
 
-    instance: t.optional(t.instanceIsA("BasePart")),
-  })(data);
+    instance: t.optional( t.instanceIsA( "BasePart" ) ),
+  } )( data );
 }
 
-export function UTIL_TraceLine(root: WorldRoot, startVec: Vector3, endVec: Vector3, params: RaycastParams): TracelineResult {
-  const direction = new CFrame(startVec, endVec).LookVector;
-  const distance = startVec.sub(endVec).Magnitude;
-  const raycast = root.Raycast(startVec, direction.mul(distance), params);
+export function UTIL_TraceLine( root: WorldRoot, startVec: Vector3, endVec: Vector3, params: RaycastParams ): TracelineResult 
+{
+  const direction = new CFrame( startVec, endVec ).LookVector;
+  const distance = startVec.sub( endVec ).Magnitude;
+  const raycast = root.Raycast( startVec, direction.mul( distance ), params );
 
   return {
     origin: startVec,

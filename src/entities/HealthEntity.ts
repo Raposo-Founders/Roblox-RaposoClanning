@@ -14,7 +14,8 @@ interface AttackerInfo {
   time: number;
 }
 
-abstract class HealthEntity extends WorldEntity {
+abstract class HealthEntity extends WorldEntity 
+{
   abstract health: number;
   abstract maxHealth: number;
 
@@ -25,55 +26,61 @@ abstract class HealthEntity extends WorldEntity {
   readonly died = new Signal<[attacker?: WorldEntity]>();
   readonly attackersList: AttackerInfo[] = [];
 
-  constructor() {
+  constructor() 
+  {
     super();
 
-    this.inheritanceList.add("HealthEntity");
+    this.inheritanceList.add( "HealthEntity" );
 
-    this.RegisterNetworkableProperty("health", BufferByteType.u16);
-    this.RegisterNetworkableProperty("maxHealth", BufferByteType.u16);
+    this.RegisterNetworkableProperty( "health", BufferByteType.u16 );
+    this.RegisterNetworkableProperty( "maxHealth", BufferByteType.u16 );
 
-    this.RegisterNetworkablePropertyHandler("health", (ctx, val) => {
+    this.RegisterNetworkablePropertyHandler( "health", ( ctx, val ) => 
+    {
       const originalHealth = this.health;
 
       this.health = val;
 
-      if (val !== originalHealth)
-        this.tookDamage.Fire(originalHealth, val);
+      if ( val !== originalHealth )
+        this.tookDamage.Fire( originalHealth, val );
 
-      if (originalHealth > 0 && val <= 0)
+      if ( originalHealth > 0 && val <= 0 )
         this.died.Fire();
 
-      if (val > 0 && originalHealth <= 0)
+      if ( val > 0 && originalHealth <= 0 )
         this.spawned.Fire();
-    });
+    } );
   }
 
-  takeDamage(amount: number, attacker?: WorldEntity) {
-    if (!this.canDealDamage) return;
+  takeDamage( amount: number, attacker?: WorldEntity ) 
+  {
+    if ( !this.canDealDamage ) return;
 
     const previousHealthAmount = this.health;
 
     this.health -= amount;
-    this.health = math.clamp(this.health, 0, this.maxHealth);
+    this.health = math.clamp( this.health, 0, this.maxHealth );
 
-    if (attacker) {
-      if (this.attackersList.findIndex(info => info.entity === attacker) === -1) {
-        attacker.OnDelete(() => {
-          if (!rawget(this, "id")) return;
-          this.attackersList.remove(this.attackersList.findIndex(val => val.entity === attacker));
-        });
+    if ( attacker ) 
+    {
+      if ( this.attackersList.findIndex( info => info.entity === attacker ) === -1 ) 
+      {
+        attacker.OnDelete( () => 
+        {
+          if ( !rawget( this, "id" ) ) return;
+          this.attackersList.remove( this.attackersList.findIndex( val => val.entity === attacker ) );
+        } );
       }
 
-      this.attackersList.push({ entity: attacker, time: time() });
+      this.attackersList.push( { entity: attacker, time: time() } );
     }
 
-    this.attackersList.sort((a, b) => a.time > b.time);
+    this.attackersList.sort( ( a, b ) => a.time > b.time );
 
-    this.tookDamage.Fire(previousHealthAmount, this.health, attacker);
+    this.tookDamage.Fire( previousHealthAmount, this.health, attacker );
 
-    if (previousHealthAmount > 0 && this.health <= 0)
-      this.died.Fire(attacker);
+    if ( previousHealthAmount > 0 && this.health <= 0 )
+      this.died.Fire( attacker );
   }
 }
 

@@ -1,7 +1,7 @@
-const stringValues = new ReadonlyMap<string, string>([
+const stringValues = new ReadonlyMap<string, string>( [
   ["USER_CMD_MISSING_ADMIN", "You must have admin privileges to run this command."],
   ["USER_CMD_MISSING_MOD", "You must have moderation privileges to run this command."],
-]);
+] );
 
 export const gameValues = {
   objtag: "GameObject",
@@ -15,8 +15,9 @@ export const gameValues = {
   cmdtempmoddefendersdeny: "Temporary moderators can't mess with the Defenders' team.",
 } as const;
 
-export function getStringMappedValue(name: string) {
-  return stringValues.get(name.upper()) || `#${name.upper()}`;
+export function getStringMappedValue( name: string ) 
+{
+  return stringValues.get( name.upper() ) || `#${name.upper()}`;
 }
 
 export enum PlayerTeam {

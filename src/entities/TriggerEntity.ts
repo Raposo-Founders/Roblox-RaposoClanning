@@ -10,7 +10,8 @@ declare global {
   }
 }
 
-class TriggerEntity extends WorldEntity {
+class TriggerEntity extends WorldEntity 
+{
   classname: keyof GameEntities = "TriggerEntity";
 
   trackingEntities = new Set<EntityId>();
@@ -18,89 +19,99 @@ class TriggerEntity extends WorldEntity {
   readonly OnStartTouch = new Signal<[WorldEntity]>();
   readonly OnEndTouch = new Signal<[WorldEntity]>();
 
-  constructor() {
+  constructor() 
+  {
     super();
   }
 
-  Destroy(): void {
+  Destroy(): void 
+  {
     this.trackingEntities.clear();
   }
 
-  GetEntitiesInZone() {
+  GetEntitiesInZone() 
+  {
     const list: WorldEntity[] = [];
 
-    for (const entityId of this.trackingEntities) {
+    for ( const entityId of this.trackingEntities ) 
+    {
       const entity = this.environment.entity.entities[entityId];
-      if (!entity || !entity.IsA("WorldEntity")) continue;
-      if (entity.IsA("HealthEntity") && entity.health <= 0) continue;
+      if ( !entity || !entity.IsA( "WorldEntity" ) ) continue;
+      if ( entity.IsA( "HealthEntity" ) && entity.health <= 0 ) continue;
 
-      list.push(entity);
+      list.push( entity );
     }
 
     return list;
   }
 
-  IsVolumeColliding(origin: Vector3, size: Vector3) {
+  IsVolumeColliding( origin: Vector3, size: Vector3 ) 
+  {
     let xColliding = false;
     let yColliding = false;
     let zColliding = false;
 
     {
-      const lowerSide = origin.X - (size.X * 0.5);
-      const upperSide = origin.X + (size.X * 0.5);
+      const lowerSide = origin.X - ( size.X * 0.5 );
+      const upperSide = origin.X + ( size.X * 0.5 );
 
-      const selfLowerSide = this.position.X - (this.size.X * 0.5);
-      const selfUpperSide = this.position.X + (this.size.X * 0.5);
+      const selfLowerSide = this.position.X - ( this.size.X * 0.5 );
+      const selfUpperSide = this.position.X + ( this.size.X * 0.5 );
 
-      xColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+      xColliding = ( lowerSide >= selfLowerSide && lowerSide <= selfUpperSide ) || ( upperSide >= selfLowerSide && upperSide <= selfUpperSide );
     }
     {
-      const lowerSide = origin.Y - (size.Y * 0.5);
-      const upperSide = origin.Y + (size.Y * 0.5);
+      const lowerSide = origin.Y - ( size.Y * 0.5 );
+      const upperSide = origin.Y + ( size.Y * 0.5 );
 
-      const selfLowerSide = this.position.Y - (this.size.Y * 0.5);
-      const selfUpperSide = this.position.Y + (this.size.Y * 0.5);
+      const selfLowerSide = this.position.Y - ( this.size.Y * 0.5 );
+      const selfUpperSide = this.position.Y + ( this.size.Y * 0.5 );
 
-      yColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+      yColliding = ( lowerSide >= selfLowerSide && lowerSide <= selfUpperSide ) || ( upperSide >= selfLowerSide && upperSide <= selfUpperSide );
     }
     {
-      const lowerSide = origin.Z - (size.Z * 0.5);
-      const upperSide = origin.Z + (size.Z * 0.5);
+      const lowerSide = origin.Z - ( size.Z * 0.5 );
+      const upperSide = origin.Z + ( size.Z * 0.5 );
 
-      const selfLowerSide = this.position.Z - (this.size.Z * 0.5);
-      const selfUpperSide = this.position.Z + (this.size.Z * 0.5);
+      const selfLowerSide = this.position.Z - ( this.size.Z * 0.5 );
+      const selfUpperSide = this.position.Z + ( this.size.Z * 0.5 );
 
-      zColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+      zColliding = ( lowerSide >= selfLowerSide && lowerSide <= selfUpperSide ) || ( upperSide >= selfLowerSide && upperSide <= selfUpperSide );
     }
 
     return xColliding && yColliding && zColliding;
   }
 
-  Think(dt: number): void {
+  Think( dt: number ): void 
+  {
     // Check to see any of the tracked entities have left the area
-    for (const entityId of this.trackingEntities) {
+    for ( const entityId of this.trackingEntities ) 
+    {
       const entity = this.environment.entity.entities[entityId];
-      if (!entity || !entity.IsA("WorldEntity")) {
-        this.trackingEntities.delete(entityId); // ^ Might give some bugs later
+      if ( !entity || !entity.IsA( "WorldEntity" ) ) 
+      {
+        this.trackingEntities.delete( entityId ); // ^ Might give some bugs later
         continue;
       }
 
-      if (!this.IsVolumeColliding(entity.position, entity.size) || (entity.IsA("HealthEntity") && entity.health <= 0)) {
-        this.OnEndTouch.Fire(entity);
-        this.trackingEntities.delete(entityId);
+      if ( !this.IsVolumeColliding( entity.position, entity.size ) || ( entity.IsA( "HealthEntity" ) && entity.health <= 0 ) ) 
+      {
+        this.OnEndTouch.Fire( entity );
+        this.trackingEntities.delete( entityId );
       }
     }
 
     // Check for any new entity inside of the zone
-    for (const entity of this.environment.entity.getEntitiesThatIsA("WorldEntity")) {
-      if (this.trackingEntities.has(entity.id)) continue;
-      if (!this.IsVolumeColliding(entity.position, entity.size)) continue;
-      if (entity.IsA("HealthEntity") && entity.health <= 0) continue;
+    for ( const entity of this.environment.entity.getEntitiesThatIsA( "WorldEntity" ) ) 
+    {
+      if ( this.trackingEntities.has( entity.id ) ) continue;
+      if ( !this.IsVolumeColliding( entity.position, entity.size ) ) continue;
+      if ( entity.IsA( "HealthEntity" ) && entity.health <= 0 ) continue;
 
-      this.trackingEntities.add(entity.id);
-      this.OnStartTouch.Fire(entity);
+      this.trackingEntities.add( entity.id );
+      this.OnStartTouch.Fire( entity );
     }
   }
 }
 
-registerEntityClass("TriggerEntity", TriggerEntity);
+registerEntityClass( "TriggerEntity", TriggerEntity );

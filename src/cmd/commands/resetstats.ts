@@ -13,36 +13,42 @@ const CMD_INDEX_NAME = "cmd_resetstats";
 
 // # Bindings & execution
 
-GameEnvironment.BindCallbackToEnvironmentCreation(env => {
-  if (!env.isServer) return;
+GameEnvironment.BindCallbackToEnvironmentCreation( env => 
+{
+  if ( !env.isServer ) return;
 
-  env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
-    if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
+  env.network.ListenPacket( CMD_INDEX_NAME, ( sender, reader ) => 
+  {
+    if ( !sender || !sender.GetAttribute( gameValues.modattr ) ) return;
 
     const entityId = reader.u16();
 
     // TODO: Make this an integrated UI interface for requesting stats resetting
-    if (!sender.GetAttribute(gameValues.adminattr)) {
-      ChatSystem.sendSystemMessage("The stats you have is what you get. (blame coolergate :P)");
+    if ( !sender.GetAttribute( gameValues.adminattr ) ) 
+    {
+      ChatSystem.sendSystemMessage( "The stats you have is what you get. (blame coolergate :P)" );
       return;
     }
 
     let callerEntity: PlayerEntity | undefined;
-    for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
-      if (ent.GetUserFromController() !== sender) continue;
+    for ( const ent of env.entity.getEntitiesThatIsA( "PlayerEntity" ) ) 
+    {
+      if ( ent.GetUserFromController() !== sender ) continue;
       callerEntity = ent;
       break;
     }
-    if (!callerEntity) return;
+    if ( !callerEntity ) return;
 
     const targetEntity = env.entity.entities[entityId];
-    if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
-      ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
+    if ( !targetEntity || !targetEntity.IsA( "PlayerEntity" ) ) 
+    {
+      ChatSystem.sendSystemMessage( `Invalid player entity ${entityId}`, [sender] );
       return;
     }
 
-    if (!defendersCommandCheck(callerEntity, targetEntity)) {
-      ChatSystem.sendSystemMessage(gameValues.cmdtempmoddefendersdeny);
+    if ( !defendersCommandCheck( callerEntity, targetEntity ) ) 
+    {
+      ChatSystem.sendSystemMessage( gameValues.cmdtempmoddefendersdeny );
       return;
     }
 
@@ -50,23 +56,26 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     targetEntity.statsDamage = 0;
     targetEntity.statsDeaths = 0;
 
-    ChatSystem.sendSystemMessage(`Reset ${targetEntity.GetUserFromController()}'s (${targetEntity.id}) stats.`); // All players
-  });
-}); 
+    ChatSystem.sendSystemMessage( `Reset ${targetEntity.GetUserFromController()}'s (${targetEntity.id}) stats.` ); // All players
+  } );
+} ); 
 
-new ConsoleFunctionCallback(["resetstats", "rs"], [{ name: "player", type: "player" }])
-  .setDescription("Resets a player's stats")
-  .setCallback((ctx) => {
-    const targetPlayers = ctx.getArgument("player", "player").value;
+new ConsoleFunctionCallback( ["resetstats", "rs"], [{ name: "player", type: "player" }] )
+  .setDescription( "Resets a player's stats" )
+  .setCallback( ( ctx ) => 
+  {
+    const targetPlayers = ctx.getArgument( "player", "player" ).value;
 
-    if (targetPlayers.size() <= 0) {
-      ChatSystem.sendSystemMessage(`<b><font color="${colorTable.errorneousColor}">Argument #1 unknown player.</font></b>`);
+    if ( targetPlayers.size() <= 0 ) 
+    {
+      ChatSystem.sendSystemMessage( `<b><font color="${colorTable.errorneousColor}">Argument #1 unknown player.</font></b>` );
       return;
     }
 
-    for (const ent of targetPlayers) {
-      const packet = new NetworkPacket(CMD_INDEX_NAME);
-      writeBufferU16(ent.id);
-      ctx.env.network.SendPacket(packet);
+    for ( const ent of targetPlayers ) 
+    {
+      const packet = new NetworkPacket( CMD_INDEX_NAME );
+      writeBufferU16( ent.id );
+      ctx.env.network.SendPacket( packet );
     }
-  });
+  } );
