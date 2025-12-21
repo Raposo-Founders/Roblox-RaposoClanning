@@ -89,7 +89,8 @@ class GameEnvironment {
         }
 
         this.entity.CreateEntityByName(classnameAttribute as keyof GameEntities).andThen(ent => {
-          ent.SetName(obj.Name);
+          if (obj.Name !== ent.classname)
+            ent.SetName(obj.Name);
 
           if (obj.IsA("BasePart") && ent.IsA("WorldEntity")) {
             const converted = UTIL_MATH_ConvertCFrameToVector3(obj.CFrame);
