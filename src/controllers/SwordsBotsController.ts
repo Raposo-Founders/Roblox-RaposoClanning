@@ -8,7 +8,7 @@ import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { RaposoConsole } from "logging";
 import { DoesInstanceExist } from "util/utilfuncs";
-import { writeBufferString } from "util/bufferwriter";
+import { writeBufferString, writeBufferU16 } from "util/bufferwriter";
 
 // # Types
 interface BotAdvanceSuggestionResult {
@@ -233,9 +233,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.network.ListenPacket(`${NETWORK_REPL_ID}botupd`, (sender, reader) => {
     if (!sender) return;
 
-    const entityId = reader.string();
+    const entityId = reader.u16();
 
-    const entity = env.entity.entities.get(entityId);
+    const entity = env.entity.entities[entityId];
     if (!entity?.IsA("SwordPlayerEntity")) return;
     if (entity.GetUserFromNetworkOwner() !== sender) {
       RaposoConsole.Warn(`Invalid ${SwordPlayerEntity} BOT state update from ${sender}.`);
@@ -266,7 +266,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       ent.grounded = ent.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
 
       const packet = new NetworkPacket(`${NETWORK_REPL_ID}botupd`);
-      writeBufferString(ent.id);
+      writeBufferU16(ent.id);
       ent.WriteClientStateBuffer();
       env.network.SendPacket(packet);
     }

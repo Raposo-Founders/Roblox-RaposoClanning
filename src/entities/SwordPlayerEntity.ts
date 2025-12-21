@@ -4,7 +4,7 @@ import { NetworkPacket } from "core/NetworkModel";
 import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
 import { BufferReader } from "util/bufferreader";
-import { BufferByteType, startBufferCreation, writeBufferBool, writeBufferF32, writeBufferString, writeBufferU8, writeBufferVector } from "util/bufferwriter";
+import { BufferByteType, startBufferCreation, writeBufferBool, writeBufferF32, writeBufferI16, writeBufferString, writeBufferU16, writeBufferU8, writeBufferVector } from "util/bufferwriter";
 import Signal from "util/signal";
 import { registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
@@ -161,7 +161,7 @@ export class SwordPlayerEntity extends PlayerEntity {
 
         const packet = new NetworkPacket(`${NETWORK_ID}swordState`);
         packet.reliable = false;
-        writeBufferString(this.id);
+        writeBufferU16(this.id);
         writeBufferU8(targetState);
         this.environment.network.SendPacket(packet);
       }
@@ -284,10 +284,10 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
   // Sword / attack changes
   env.network.ListenPacket(`${NETWORK_ID}swordState`, (sender, reader) => {
-    const entityId = reader.string();
+    const entityId = reader.u16();
     const newState = reader.u8();
 
-    const targetEntity = env.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities[entityId];
     if (!targetEntity || !targetEntity.IsA("SwordPlayerEntity")) return;
 
     if (newState === SwordState.Lunge)

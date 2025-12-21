@@ -6,7 +6,7 @@ import { colorTable } from "UI/values";
 const ICON_ID = "rbxassetid://103434352040367";
 const ICON_SIZE = UDim2.fromOffset(80, 80);
 
-export function CapturePointMeter(props: { entityId: string }) {
+export function CapturePointMeter(props: { entityId: EntityId }) {
   const [captureProgress, setCaptureProgress] = React.createBinding(0);
 
   let entity: CapturePointEntity | undefined;
@@ -21,7 +21,7 @@ export function CapturePointMeter(props: { entityId: string }) {
     }
 
     if (!entity) {
-      const searchEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId);
+      const searchEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId];
       if (!searchEntity || !searchEntity.IsA("CapturePointEntity")) return;
 
       entity = searchEntity;

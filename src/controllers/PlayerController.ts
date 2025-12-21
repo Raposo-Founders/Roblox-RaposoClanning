@@ -6,7 +6,7 @@ import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
 import { sendSystemMessage } from "systems/ChatSystem";
 import { ClanwareCaseSystem } from "systems/ClanwareCaseSystem";
-import { writeBufferF32, writeBufferString } from "util/bufferwriter";
+import { writeBufferF32, writeBufferI16, writeBufferString, writeBufferU16 } from "util/bufferwriter";
 
 // # Constants & variables
 const TARGET_GROUP = 7203437 as const;
@@ -21,7 +21,7 @@ const ADMIN_ROLES: string[] = [
 ] as const;
 
 // # Functions
-function formatEntityId(userId: number) {
+function FormatPlayerEntityName(userId: number) {
   return string.format("PlayerEntity_%i", userId);
 }
 
@@ -46,7 +46,8 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     const listedInfo = ClanwareCaseSystem.IsUserListed(user.UserId);
 
-    env.entity.createEntity("SwordPlayerEntity", formatEntityId(user.UserId)).andThen(ent => {
+    env.entity.CreateEntityByName("SwordPlayerEntity").andThen(ent => {
+      ent.SetName(FormatPlayerEntityName(user.UserId));
       ent.controller = referenceId;
       ent.appearanceId = user.UserId;
 
@@ -57,8 +58,8 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
           const packet = new NetworkPacket("game_killfeed");
           writeBufferF32(distance);
-          writeBufferString(attacker.id);
-          writeBufferString(ent.id);
+          writeBufferU16(attacker.id);
+          writeBufferU16(ent.id);
           env.network.SendPacket(packet);
         }
 
@@ -91,7 +92,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.playerLeft.Connect(user => {
     sendSystemMessage(`${user.Name} has left the game.`);
 
-    const targetEntity = env.entity.entities.get(formatEntityId(user.UserId));
+    const targetEntity = env.entity.namedEntities.get(FormatPlayerEntityName(user.UserId));
     if (!targetEntity?.IsA("PlayerEntity")) return;
 
     env.entity.killThisFucker(targetEntity);

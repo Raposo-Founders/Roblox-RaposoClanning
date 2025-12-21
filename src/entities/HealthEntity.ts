@@ -1,6 +1,7 @@
 import { BufferByteType } from "util/bufferwriter";
 import Signal from "util/signal";
 import WorldEntity from "./WorldEntity";
+import BaseEntity from "./BaseEntity";
 
 declare global {
   interface GameEntities {
@@ -9,7 +10,7 @@ declare global {
 }
 
 interface AttackerInfo {
-  entityId: string;
+  entity: BaseEntity;
   time: number;
 }
 
@@ -56,8 +57,17 @@ abstract class HealthEntity extends WorldEntity {
     this.health -= amount;
     this.health = math.clamp(this.health, 0, this.maxHealth);
 
-    if (attacker)
-      this.attackersList.push({ entityId: attacker.id, time: time() });
+    if (attacker) {
+      if (this.attackersList.findIndex(info => info.entity === attacker) === -1) {
+        attacker.OnDelete(() => {
+          if (!rawget(this, "id")) return;
+          this.attackersList.remove(this.attackersList.findIndex(val => val.entity === attacker));
+        });
+      }
+
+      this.attackersList.push({ entity: attacker, time: time() });
+    }
+
     this.attackersList.sort((a, b) => a.time > b.time);
 
     this.tookDamage.Fire(previousHealthAmount, this.health, attacker);

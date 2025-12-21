@@ -3,6 +3,7 @@ import React from "@rbxts/react";
 import { Players } from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
+import BaseEntity from "entities/BaseEntity";
 import { cacheFolder } from "folders";
 import { PlayermodelRigManager } from "providers/PlayermodelRigManager";
 import { uiValues } from "UI/values";
@@ -38,22 +39,22 @@ export function HudPlayerPanel() {
     if (!cameraReference.current) return;
     if (!viewportReference.current) return;
 
-    let currentEntity = "";
+    let currentEntityId: EntityId = 0;
     let currentModel: PlayermodelRigManager | undefined;
 
     viewportReference.current.CurrentCamera = cameraReference.current;
 
     GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
-      let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(currentEntity);
+      let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[currentEntityId] as BaseEntity | undefined;
       if (!playerEntity || !playerEntity.IsA("PlayerEntity") || !playerEntity.humanoidModel) {
         playerEntity = getLocalPlayerEntity(GameEnvironment.GetDefaultEnvironment());
         if (!playerEntity || !playerEntity.IsA("PlayerEntity") || !playerEntity.humanoidModel) return;
       }
 
       // Means that this is the first time that it gets set
-      if (currentEntity !== playerEntity.id) {
-        currentEntity = playerEntity.id;
-        playerEntity.OnDelete(() => currentEntity = "");
+      if (currentEntityId !== playerEntity.id) {
+        currentEntityId = playerEntity.id;
+        playerEntity.OnDelete(() => currentEntityId = 0);
 
         playerEntity.died.Connect(() => {
           currentModel?.SetDescription(defaultDescription);

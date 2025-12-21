@@ -4,6 +4,7 @@ import { BufferByteType, writeBufferBool, writeBufferF32, writeBufferString, wri
 import { registerEntityClass } from ".";
 import PlayerEntity from "./PlayerEntity";
 import WorldEntity from "./WorldEntity";
+import BaseEntity from "./BaseEntity";
 
 declare global {
   interface GameEntities {
@@ -43,7 +44,7 @@ export default class CapturePointEntity extends WorldEntity {
   capture_speed = 2.5;
   is_instant_cap = false;
 
-  linkedTrigger: EntityId = "";
+  linkedTrigger: BaseEntity["name"] = "";
 
   constructor() {
     super();
@@ -62,7 +63,7 @@ export default class CapturePointEntity extends WorldEntity {
   UpdateCaptureProgress(dt: number) {
     let total_capture_multiplier = 0;
 
-    const triggerEntity = this.environment.entity.entities.get(this.linkedTrigger) || this.environment.entity.namedEntities.get(this.linkedTrigger);
+    const triggerEntity = this.environment.entity.namedEntities.get(this.linkedTrigger);
     if (triggerEntity?.IsA("TriggerEntity"))
       for (const ent of triggerEntity.GetEntitiesInZone()) {
         if (!ent.IsA("PlayerEntity")) continue;

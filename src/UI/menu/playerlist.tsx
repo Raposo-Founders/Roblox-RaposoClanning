@@ -91,7 +91,7 @@ function PlayerEntry(props: { Entity: PlayerEntity }) {
           Enum.FontWeight.SemiBold,
           Enum.FontStyle.Normal
         )}
-        Text={props.Entity.GetUserFromController()?.Name ?? props.Entity.id}
+        Text={props.Entity.GetUserFromController()?.Name ?? props.Entity.name}
         TextColor3={Color3.fromHex("#FFFFFF")}
         TextSize={20}
         TextTruncate={"AtEnd"}
@@ -272,7 +272,7 @@ function TeamHeader(props: { Team: PlayerTeam }) {
 
 function TeamDisplayContent(props: { Team: PlayerTeam }) {
   const contentReference = React.createRef<ScrollingFrame>();
-  const mountedContent = new Map<string, ReactRoblox.Root>();
+  const mountedContent = new Map<EntityId, ReactRoblox.Root>();
 
   let targetColorHex = colorTable.spectatorsColor;
   if (props.Team === PlayerTeam.Defenders) targetColorHex = colorTable.defendersColor;
@@ -292,7 +292,7 @@ function TeamDisplayContent(props: { Team: PlayerTeam }) {
 
     // Remove invalid entries
     for (const [entityId, root] of mountedContent) {
-      const targetEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(entityId);
+      const targetEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[entityId];
       if (targetEntity?.IsA("PlayerEntity") && targetEntity.team === props.Team) continue;
 
       root.unmount();

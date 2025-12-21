@@ -1,4 +1,4 @@
-import { Players, ReplicatedStorage } from "@rbxts/services";
+import { CollectionService, Players, ReplicatedStorage } from "@rbxts/services";
 import { LifecycleContainer } from "core/GameLifecycle";
 import { EntityCompareSnapshotVersions, GetLatestClientAknowledgedSnapshot, GetSnapshotsFromEnvironmentId, ReadBufferEntityChanges, StoreEnvironmentSnapshot, WriteEntityBufferChanges } from "core/Snapshot";
 import { RaposoConsole } from "logging";
@@ -8,6 +8,7 @@ import { writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
 import { RandomString, ReplicatedInstance } from "../util/utilfuncs";
 import { NetworkDataStreamer, NetworkPacket, SendStandardMessage } from "./NetworkModel";
+import BaseEntity from "entities/BaseEntity";
 
 // # Types
 type T_EnvironmentBinding = (env: GameEnvironment) => void;
@@ -132,15 +133,33 @@ class GameEnvironment {
 
         const entityChanges = ReadBufferEntityChanges(reader);
 
+        // Remove entities
+        for (const entityId of entityChanges.removed)
+          if (this.entity.entities[entityId] !== undefined) {
+            this.entity.killThisFucker(this.entity.entities[entityId]);
+          }
+
         // Create new entities
         for (const newEntityInfo of entityChanges.new) {
-          if (this.entity.entities.has(newEntityInfo.id)) continue;
-          this.entity.createEntity(newEntityInfo.classname, newEntityInfo.id);
+
+          // Check for the existing entity
+          {
+            let existingEntity: BaseEntity | undefined = this.entity.entities[newEntityInfo.id];
+
+            if (existingEntity && existingEntity.classname !== newEntityInfo.classname) {
+              this.entity.killThisFucker(existingEntity);
+              existingEntity = undefined;
+            }
+
+            if (existingEntity) continue;
+          }
+
+          this.entity.CreateEntityByName(newEntityInfo.classname);
         }
 
         // Synchronize changes
         for (const [entityId, entityState] of entityChanges.changed) {
-          const entity = this.entity.entities.get(entityId);
+          const entity = this.entity.entities[entityId];
           if (!entity) continue;
 
           for (const [variableName, valueInfo] of entityState) {
@@ -158,11 +177,6 @@ class GameEnvironment {
             entity.networkablePropertiesHandlers.get(variableName)?.(entityState, valueInfo.value);
           }
         }
-
-        // Remove entities
-        for (const entityId of entityChanges.removed)
-          if (this.entity.entities.has(entityId))
-            this.entity.killThisFucker(this.entity.entities.get(entityId)!);
 
         // Acknowledge snapshot
         const packetConfig = new NetworkPacket("gameenv_snap_ack");

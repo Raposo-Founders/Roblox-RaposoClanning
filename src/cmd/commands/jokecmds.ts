@@ -20,7 +20,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   });
 }); 
 
-new ConsoleFunctionCallback(["fly", "ff", "forcefield", "invisible", "invis", "god"], [])
+new ConsoleFunctionCallback(["fly", "ff", "forcefield", "invisible", "invis", "god", "to", "bring"], [])
   .setCallback((ctx) => {
     const packet = new NetworkPacket(CMD_INDEX_NAME);
     writeBufferString("joke");

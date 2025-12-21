@@ -10,7 +10,7 @@ import { PlayerTeam } from "gamevalues";
 import WorldProvider, { ObjectsFolder } from "providers/WorldProvider";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
 import { colorTable } from "UI/values";
-import { writeBufferString, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU16, writeBufferU8 } from "util/bufferwriter";
 import { generateTracelineParameters } from "util/traceparam";
 import { DoesInstanceExist } from "util/utilfuncs";
 
@@ -18,7 +18,7 @@ import { DoesInstanceExist } from "util/utilfuncs";
 const NETWORK_ID = "swordcon_";
 const SWORD_MODEL = modelsFolder.WaitForChild("Sword") as BasePart;
 
-const trackingEntityHits = new Map<string, Set<BasePart>>();
+const trackingEntityHits = new Map<EntityId, Set<BasePart>>();
 const swordSize = new Vector3(1, 0.8, 4);
 const swordGripOffset = new CFrame(0, -1, -1.5).mul(CFrame.Angles(0, math.rad(180), math.rad(-90)));
 const swordLungeOffset = new CFrame(-1.5, 0, -1.5).mul(CFrame.Angles(0, -math.rad(90), 0));
@@ -56,8 +56,8 @@ function CheckPlayers<T extends BaseEntity>(entity1: SwordPlayerEntity, entity2:
 function ClientWriteNetworkHit(network: NetworkDataStreamer, mode: NetworkSwordHitIndex, attacker: EntityId, victim: EntityId) {
   const packet = new NetworkPacket(`${NETWORK_ID}hit`);
   writeBufferU8(mode);
-  writeBufferString(attacker);
-  writeBufferString(victim);
+  writeBufferU16(attacker);
+  writeBufferU16(victim);
   network.SendPacket(packet);
 }
 
@@ -160,11 +160,11 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     if (!sender) return;
 
     const hitIndex = reader.u8();
-    const attackerId = reader.string();
-    const victimId = reader.string();
+    const attackerId = reader.u16();
+    const victimId = reader.u16();
 
-    const attackerEntity = env.entity.entities.get(attackerId);
-    const victimEntity = env.entity.entities.get(victimId);
+    const attackerEntity = env.entity.entities[attackerId];
+    const victimEntity = env.entity.entities[victimId];
     if (!attackerEntity?.IsA("SwordPlayerEntity") || !victimEntity?.IsA("HealthEntity")) return;
 
     if (!CheckPlayers(attackerEntity, victimEntity)) return;
@@ -201,7 +201,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
     while (!ent.humanoidModel) task.wait();
 
-    const lastEntitiesHitTime = new Map<string, number>();
+    const lastEntitiesHitTime = new Map<EntityId, number>();
 
     const getGripPosition = () => ent.currentState === SwordState.Lunge ? swordLungeOffset : new CFrame();
 

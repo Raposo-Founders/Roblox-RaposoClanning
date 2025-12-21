@@ -7,7 +7,7 @@ export function ObjectivesLine() {
   const parentRef = useRef<Frame>();
 
   useEffect(() => {
-    const mountedRoots = new Map<string, Root>();
+    const mountedRoots = new Map<EntityId, Root>();
 
     GameEnvironment.GetDefaultEnvironment().entity.entityCreated.Connect(ent => {
       if (!parentRef.current) return;

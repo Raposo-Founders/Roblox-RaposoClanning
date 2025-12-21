@@ -1,9 +1,7 @@
-import { RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
-import Signal from "util/signal";
-import { RandomString } from "util/utilfuncs";
-import BaseEntity from "./BaseEntity";
 import { RaposoConsole } from "logging";
+import Signal from "util/signal";
+import BaseEntity from "./BaseEntity";
 
 // # Types
 declare global {
@@ -46,56 +44,46 @@ export function requireEntities() {
 
 // # Class
 export class EntityManager {
-  readonly entities = new Map<EntityId, BaseEntity>();
+  readonly entities: BaseEntity[] = [];
   readonly namedEntities = new Map<string, BaseEntity>();
   readonly entityCreated = new Signal<[Entity: BaseEntity]>();
   readonly entityDeleting = new Signal<[Entity: BaseEntity]>();
 
   constructor(public environment: T_GameEnvironment) { }
 
-  async createEntity<K extends keyof GameEntities>(classname: K, entityId: string | undefined): Promise<EntityType<K>> {
+  async CreateEntityByName<K extends keyof GameEntities>(classname: K): Promise<EntityType<K>> {
     const entity_constructor = entitiesBuildList.get(classname);
     assert(entity_constructor, `Attempt to create unknown entity: "${classname}"`);
 
     print(`Spawning entity ${classname}...`);
 
-    // Make sure to prevent any duplicate entity IDs
-    if (entityId === undefined)
-      while (entityId === undefined) {
-        const randomId = RandomString(5);
-
-        if (this.entities.has(randomId))
-          continue;
-
-        entityId = randomId;
-        break;
-      }
-
-    if (this.entities.has(entityId))
-      throw `Entity of id ${entityId} already exists as an ${this.entities.get(entityId)!.classname}.`;
-
     const entity = new entity_constructor();
-    rawset(entity, "environment", this.environment);
-    rawset(entity, "id", entityId);
 
-    this.entities.set(entity.id, entity);
+    this.entities.push(entity);
+    rawset(entity, "id", this.entities.findIndex(val => val === entity));
+    rawset(entity, "environment", this.environment);
 
     for (const callback of entity.setupFinishedCallbacks)
       task.spawn(callback);
+    entity.setupFinishedCallbacks.clear();
 
     this.entityCreated.Fire(entity);
 
     return entity as unknown as EntityType<K>;
   }
 
-  killThisFucker(entity: BaseEntity) {
+  killThisFucker(entity: BaseEntity | undefined) {
+    if (!t.table(entity)) return;
     if (!this.isEntityOnMemoryOrImSchizo(entity)) return;
-    if (!t.table(entity) || !t.string(rawget(entity, "id") as EntityId))
+    if (!t.number(rawget(entity, "id") as EntityId))
       throw `This s### is an invalid entity. ${entity.classname} ${entity.id}`;
 
     print(`Killing entity ${entity.classname} ${entity.id}`);
 
-    this.entities.delete(entity.id);
+    const entityIndex = this.entities.findIndex(val => val === entity);
+    if (entityIndex > -1)
+      rawset(this.entities, entityIndex + 1, undefined);
+    this.namedEntities.delete(entity.name);
     this.entityDeleting.Fire(entity);
 
     task.defer(() => {
@@ -139,79 +127,41 @@ export class EntityManager {
     });
   }
 
-  isEntityOnMemoryOrImSchizo(entity: BaseEntity | EntityId | undefined): boolean {
-
-    // If an nil value is given.
-    if (!t.any(entity)) return false;
-
-    // If an string value is given.
-    if (t.string(entity)) return this.entities.has(entity);
-
-    // If the object is not an table.
-    if (!t.table(entity)) return false;
-
-    // Try to get the "id" variable from the object
-    const id = rawget(entity, "id") as EntityId;
-    if (!t.string(id)) return false;
-
-    return this.entities.has(id);
-
-    // Why the fuck did you have to comment each and every step of this?
-    // Are we teaching this to a toddler or something?
+  isEntityOnMemoryOrImSchizo(entity: BaseEntity | undefined): boolean {
+    return t.any(entity) && t.table(entity) && t.number(rawget(entity, "id")) && this.entities.findIndex(ent => ent === entity) > -1;
   }
 
   getEntitiesThatIsA<K extends keyof GameEntities, E extends GameEntities[K]>(classname: K): E["prototype"][] {
-    const list: (E["prototype"])[] = [];
-
     // Check if the classname is actually valid
     if (!registeredEntityClassnames.has(classname))
       throw `Invalid entity classname: ${classname}`;
 
-    for (const [, ent] of this.entities) {
-      if (!ent.IsA(classname)) continue;
-      list.push(ent as unknown as EntityType<K>);
-    }
-
-    return list;
+    return this.entities.filter(val => val.IsA(classname)) as (E["prototype"])[];
   }
 
-  getEntitiesOfClass<K extends keyof GameEntities, E extends GameEntities[K]>(classname: K): E["prototype"][] {
-    const list: (E["prototype"])[] = [];
-
+  getEntitiesOfClass<K extends keyof GameEntities, E extends GameEntities[K]>(classname: K): (E["prototype"])[] {
     // Check if the classname is actually valid
     if (!registeredEntityClassnames.has(classname))
       throw `Invalid entity classname: ${classname}`;
 
-    for (const [, ent] of this.entities) {
-      if (ent.classname !== classname) continue;
-      list.push(ent as unknown as EntityType<K>);
-    }
-
-    return list;
+    return this.entities.filter(val => val.classname === classname) as (E["prototype"])[];
   }
 
   getEntitiesFromInstance(inst: Instance) {
-    const list: BaseEntity[] = [];
-
-    for (const [, ent] of this.entities) {
-      if (ent.associatedInstances.has(inst)) {
-        list.push(ent);
-        continue;
-      }
+    return this.entities.filter(ent => {
+      if (ent.associatedInstances.has(inst)) return true;
 
       for (const associatedInstance of ent.associatedInstances) {
         if (!inst.IsDescendantOf(associatedInstance)) continue;
-
-        list.push(ent);
-        break;
+        return true;
       }
-    }
 
-    return list;
+      return false;
+    });
   }
 
   murderAllFuckers() {
-    for (const [entid, info] of this.entities)
-      this.killThisFucker(info);
+    for (const ent of this.entities)
+      this.killThisFucker(ent);
   }
 }

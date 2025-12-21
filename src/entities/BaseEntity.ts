@@ -1,7 +1,5 @@
-import { values } from "@rbxts/object-utils";
 import { t } from "@rbxts/t";
 import { RaposoConsole } from "logging";
-import { BufferReader } from "util/bufferreader";
 import { BufferByteType } from "util/bufferwriter";
 import { ErrorObject } from "util/utilfuncs";
 
@@ -17,7 +15,7 @@ declare global {
 type T_EntityInputListing = { typechecks: readonly t.check<unknown>[], callback: Callback };
 
 abstract class BaseEntity {
-  readonly id = ErrorObject<string>("Entity id cannot be accessed during contruction.");
+  readonly id = ErrorObject<number>("Entity id cannot be accessed during contruction.");
   readonly name = "";
   readonly environment = ErrorObject<T_GameEnvironment>("Entity environment cannot be accessed during construction.");
 
@@ -35,8 +33,14 @@ abstract class BaseEntity {
   constructor() {
     this.inheritanceList.add("BaseEntity");
 
-    this.RegisterNetworkableProperty("id", BufferByteType.str);
+    this.RegisterNetworkableProperty("id", BufferByteType.u16);
     this.RegisterNetworkableProperty("name", BufferByteType.str);
+
+    this.OnDelete(() => {
+      this.inputList.clear();
+      this.networkableProperties.clear();
+      this.networkablePropertiesHandlers.clear();
+    });
   }
 
   protected RegisterNetworkableProperty<T extends keyof this>(variableName: T, byteType: BufferByteType) {

@@ -8,7 +8,7 @@ import { gameValues } from "gamevalues";
 import { GetCreatorGroupInfo } from "providers/GroupsProvider";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { writeBufferString, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU16, writeBufferU8 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_team";
@@ -21,7 +21,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
     if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
 
-    const entityId = reader.string();
+    const entityId = reader.u16();
     const team = reader.u8();
 
     let callerEntity: PlayerEntity | undefined;
@@ -32,7 +32,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     }
     if (!callerEntity) return;
 
-    const targetEntity = env.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities[entityId];
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
       ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
       return;
@@ -108,7 +108,7 @@ new ConsoleFunctionCallback(["team"], [{ name: "player", type: "player" }, { nam
 
     for (const ent of targetPlayers) {
       const packet = new NetworkPacket(CMD_INDEX_NAME);
-      writeBufferString(ent.id);
+      writeBufferU16(ent.id);
       writeBufferU8(PlayerTeam[team]);
       ctx.env.network.SendPacket(packet);
     }

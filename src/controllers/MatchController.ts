@@ -19,7 +19,7 @@ function SpawnCapturePoints(session: GameEnvironment) {
     if (!obj.IsA("BasePart")) continue;
     if (obj.Name !== "ent_objective_capturepoint") continue;
 
-    session.entity.createEntity("CapturePointEntity", undefined).andThen(entity => {
+    session.entity.CreateEntityByName("CapturePointEntity").andThen(entity => {
       entity.position = obj.CFrame.Position;
       entity.size = obj.Size;
     });

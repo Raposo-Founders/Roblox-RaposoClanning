@@ -6,7 +6,7 @@ import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { writeBufferString } from "util/bufferwriter";
+import { writeBufferString, writeBufferU16 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_kick";
@@ -19,7 +19,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   env.network.ListenPacket(CMD_INDEX_NAME, (sender, reader) => {
     if (!sender || !sender.GetAttribute(gameValues.modattr)) return;
 
-    const entityId = reader.string();
+    const entityId = reader.u16();
     const reason = reader.string();
 
     // TODO: Properly make this command only available for admins
@@ -36,7 +36,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
     }
     if (!callerEntity) return;
 
-    const targetEntity = env.entity.entities.get(entityId);
+    const targetEntity = env.entity.entities[entityId];
     if (!targetEntity || !targetEntity.IsA("PlayerEntity")) {
       ChatSystem.sendSystemMessage(`Invalid player entity ${entityId}`, [sender]);
       return;
@@ -74,7 +74,7 @@ new ConsoleFunctionCallback(["kick"], [{ name: "player", type: "player" }, { nam
 
     for (const ent of targetPlayers) {
       const packet = new NetworkPacket(CMD_INDEX_NAME);
-      writeBufferString(ent.id);
+      writeBufferU16(ent.id);
       writeBufferString(reason.join(" "));
       ctx.env.network.SendPacket(packet);
     }

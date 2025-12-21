@@ -28,7 +28,7 @@ class TriggerEntity extends WorldEntity {
     const list: WorldEntity[] = [];
 
     for (const entityId of this.trackingEntities) {
-      const entity = this.environment.entity.entities.get(entityId);
+      const entity = this.environment.entity.entities[entityId];
       if (!entity || !entity.IsA("WorldEntity")) continue;
       if (entity.IsA("HealthEntity") && entity.health <= 0) continue;
 
@@ -63,7 +63,7 @@ class TriggerEntity extends WorldEntity {
   Think(dt: number): void {
     // Check to see any of the tracked entities have left the area
     for (const entityId of this.trackingEntities) {
-      const entity = this.environment.entity.entities.get(entityId);
+      const entity = this.environment.entity.entities[entityId];
       if (!entity || !entity.IsA("WorldEntity")) {
         this.trackingEntities.delete(entityId); // ^ Might give some bugs later
         continue;

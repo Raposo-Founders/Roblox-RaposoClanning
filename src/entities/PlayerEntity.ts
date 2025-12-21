@@ -75,7 +75,7 @@ function InsertEntityPlayermodel(entity: PlayerEntity) {
   humanoidModel.Humanoid.WaitForChild("Animator");
   humanoidModel.PrimaryPart = humanoidModel.WaitForChild("Torso") as BasePart;
 
-  humanoidModel.Name = entity.id;
+  humanoidModel.Name = entity.name;
   humanoidModel.Parent = WorldProvider.ObjectsFolder;
   humanoidModel.Humanoid.Health = 1;
   humanoidModel.Humanoid.MaxHealth = 1;

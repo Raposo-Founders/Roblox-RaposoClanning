@@ -45,7 +45,7 @@ export function generateTracelineParameters<B extends boolean, T extends B exten
 
   // Filter entities
   if (searchEntities.size() > 0 || ignoreEntities.size() > 0)
-    for (const [entityId, entity] of entitiesEnvironment.entities) {
+    for (const entity of entitiesEnvironment.entities) {
       if (searchEntities.size() > 0 && !IsEntityListed(entity, searchEntities)) continue;
       if (ignoreEntities.size() > 0 && IsEntityListed(entity, ignoreEntities)) continue;
 

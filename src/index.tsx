@@ -120,7 +120,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   }
 
   env.lifecycle.BindTickrate((_, dt) => {
-    for (const [, ent] of env.entity.entities) {
+    for (const ent of env.entity.entities) {
       const [success, message] = pcall(() => ent.Think(dt));
       if (success) continue;
 

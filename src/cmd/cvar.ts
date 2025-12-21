@@ -99,7 +99,7 @@ function getPlayersFromString(value: string, caller: Player, env: GameEnvironmen
 
     for (const ent of env.entity.getEntitiesThatIsA("PlayerEntity")) {
       const controller = ent.GetUserFromController();
-      const name = (controller ? controller.Name : ent.id).lower();
+      const name = (controller ? controller.Name : ent.name).lower();
 
       for (const username of formattedUsernamesSplit) {
         if (name.sub(0, username.size()) !== username) continue;

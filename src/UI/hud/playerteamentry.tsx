@@ -20,7 +20,7 @@ function formatUserImageLabel(userId: number) {
   return string.format("rbxthumb://type=AvatarBust&id=%i&w=100&h=100", userId);
 }
 
-function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: React.Binding<string> }) {
+function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: React.Binding<EntityId> }) {
   const [usernameBind, SetUsername] = React.createBinding("");
   const [killsBind, SetKills] = React.createBinding(0);
   const [deathsBind, SetDeaths] = React.createBinding(0);
@@ -29,7 +29,7 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
   const [accentColor, SetAccentColor] = React.createBinding(Color3.fromHex(colorTable.spectatorsColor));
 
   const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
     if (!entity?.IsA("PlayerEntity")) {
       SetUsername("");
       SetKills(0);
@@ -43,7 +43,7 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
 
     const controller = entity.GetUserFromController();
 
-    SetUsername(controller ? controller.Name : entity.id);
+    SetUsername(controller ? controller.Name : entity.name);
     SetKills(entity.statsKills);
     SetDeaths(entity.statsDeaths);
     SetPing(entity.statsPing);
@@ -51,8 +51,8 @@ function ExpandedEntryInfo(props: { visible: React.Binding<boolean>, entityId: R
 
     {
       let teamColor = colorTable.spectatorsColor;
-      if (props.entityId.getValue() !== "" && entity.team === PlayerTeam.Defenders) teamColor = colorTable.defendersColor;
-      if (props.entityId.getValue() !== "" && entity.team === PlayerTeam.Raiders) teamColor = colorTable.raidersColor;
+      if (entity.team === PlayerTeam.Defenders) teamColor = colorTable.defendersColor;
+      if (entity.team === PlayerTeam.Raiders) teamColor = colorTable.raidersColor;
 
       SetAccentColor(Color3.fromHex(teamColor));
     }
@@ -141,7 +141,7 @@ function SmallHealthBar(props: { entityId: React.Binding<EntityId>, visibileModi
   const [sizeBinding, SetSize] = React.createBinding(0);
 
   const connection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
     if (!entity?.IsA("PlayerEntity")) {
       SetSize(0);
       return;
@@ -191,7 +191,7 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
   let mouseInFrame = false;
 
   const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate(() => {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get(props.entityId.getValue());
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
     if (!entity?.IsA("PlayerEntity")) {
       SetUserDead(true);
       SetUserDisconnected(true);
@@ -207,8 +207,8 @@ function PlayerTopTeamEntry(props: { entityId: React.Binding<EntityId>, layoutOr
 
     {
       let teamColor = colorTable.spectatorsColor;
-      if (props.entityId.getValue() !== "" && entity.team === PlayerTeam.Defenders) teamColor = colorTable.defendersColor;
-      if (props.entityId.getValue() !== "" && entity.team === PlayerTeam.Raiders) teamColor = colorTable.raidersColor;
+      if (entity.team === PlayerTeam.Defenders) teamColor = colorTable.defendersColor;
+      if (entity.team === PlayerTeam.Raiders) teamColor = colorTable.raidersColor;
 
       SetTeamColor(Color3.fromHex(teamColor));
     }
@@ -364,7 +364,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
         const targetPlayer = entitiesList[i];
 
         if (!uiEntryInfo) {
-          const [entityIdBinding, SetEntityId] = React.createBinding<EntityId>("");
+          const [entityIdBinding, SetEntityId] = React.createBinding<EntityId>(-1);
           const [layoutOrderBinding, SetLayoutOrder] = React.createBinding(999999);
 
           const root = ReactRoblox.createRoot(referenceFrame.current, { "hydrate": true });
@@ -379,7 +379,7 @@ export function PlayersTopListing(props: { team: keyof typeof PlayerTeam }) {
         }
 
         if (!targetPlayer) {
-          uiEntryInfo.setEntityId("");
+          uiEntryInfo.setEntityId(-1);
           uiEntryInfo.setLayoutOrder(999 * (props.team === "Defenders" ? -1 : 1));
 
           continue;

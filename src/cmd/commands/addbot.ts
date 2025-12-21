@@ -42,8 +42,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
       }
       if (!callerEntity) continue;
 
-      session.entity.createEntity("SwordPlayerEntity", `bot_${entityName}`)
+      session.entity.CreateEntityByName("SwordPlayerEntity")
         .andThen(ent => {
+          ent.SetName(`bot_${entityName}`);
           ent.appearanceId = sender.UserId;
           ent.team = PlayerTeam.Raiders;
           ent.networkOwner = tostring(sender!.GetAttribute(gameValues.usersessionid));
