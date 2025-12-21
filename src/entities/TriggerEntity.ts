@@ -1,6 +1,8 @@
+import { RunService } from "@rbxts/services";
+import { registerEntityClass } from "entities";
+import { RaposoConsole } from "logging";
 import Signal from "util/signal";
 import WorldEntity from "./WorldEntity";
-import { registerEntityClass } from "entities";
 
 declare global {
   interface GameEntities {
@@ -39,25 +41,39 @@ class TriggerEntity extends WorldEntity {
   }
 
   IsVolumeColliding(origin: Vector3, size: Vector3) {
-    const xMinVal = origin.X - (size.X * 0.5);
-    const xMaxVal = origin.X + (size.X * 0.5);
-    const yMinVal = origin.Y - (size.Y * 0.5);
-    const yMaxVal = origin.Y + (size.Y * 0.5);
-    const zMinVal = origin.Z + (size.Z * 0.5);
-    const zMaxVal = origin.Z + (size.Z * 0.5);
+    let xColliding = false;
+    let yColliding = false;
+    let zColliding = false;
 
-    const selfXMin = this.position.X - (this.size.X * 0.5);
-    const selfXMax = this.position.X + (this.size.X * 0.5);
-    const selfYMin = this.position.Y - (this.size.Y * 0.5);
-    const selfYMax = this.position.Y + (this.size.Y * 0.5);
-    const selfZMin = this.position.Z - (this.size.Z * 0.5);
-    const selfZMax = this.position.Z + (this.size.Z * 0.5);
+    {
+      const lowerSide = origin.X - (size.X * 0.5);
+      const upperSide = origin.X + (size.X * 0.5);
 
-    const xOverlap = selfXMin <= xMaxVal && xMinVal >= selfXMax;
-    const yOverlap = selfYMin <= yMaxVal && yMinVal >= selfYMax;
-    const zOverlap = selfZMin <= zMaxVal && zMinVal >= selfZMax;
+      const selfLowerSide = this.position.X - (this.size.X * 0.5);
+      const selfUpperSide = this.position.X + (this.size.X * 0.5);
 
-    return xOverlap && yOverlap && zOverlap;
+      xColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+    }
+    {
+      const lowerSide = origin.Y - (size.Y * 0.5);
+      const upperSide = origin.Y + (size.Y * 0.5);
+
+      const selfLowerSide = this.position.Y - (this.size.Y * 0.5);
+      const selfUpperSide = this.position.Y + (this.size.Y * 0.5);
+
+      yColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+    }
+    {
+      const lowerSide = origin.Z - (size.Z * 0.5);
+      const upperSide = origin.Z + (size.Z * 0.5);
+
+      const selfLowerSide = this.position.Z - (this.size.Z * 0.5);
+      const selfUpperSide = this.position.Z + (this.size.Z * 0.5);
+
+      zColliding = (lowerSide >= selfLowerSide && lowerSide <= selfUpperSide) || (upperSide >= selfLowerSide && upperSide <= selfUpperSide);
+    }
+
+    return xColliding && yColliding && zColliding;
   }
 
   Think(dt: number): void {
