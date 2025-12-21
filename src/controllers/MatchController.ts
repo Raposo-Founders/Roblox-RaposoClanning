@@ -14,17 +14,6 @@ import { getPlayersFromTeam } from "./PlayerController";
 // # Constants & variables
 
 // # Functions
-function SpawnCapturePoints(session: GameEnvironment) {
-  for (const obj of WorldProvider.ObjectsFolder.GetChildren()) {
-    if (!obj.IsA("BasePart")) continue;
-    if (obj.Name !== "ent_objective_capturepoint") continue;
-
-    session.entity.CreateEntityByName("CapturePointEntity").andThen(entity => {
-      entity.position = obj.CFrame.Position;
-      entity.size = obj.Size;
-    });
-  }
-}
 
 function ResetCapturePoints(session: GameEnvironment) {
   for (const ent of session.entity.getEntitiesThatIsA("CapturePointEntity")) {
@@ -56,8 +45,6 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   let totalTeamSize = 5;
   
   let elapsedMatchTime = 0;
-  
-  SpawnCapturePoints(env);
 
   env.network.ListenPacket("match_start", (sender, reader) => {
     if (!sender || !sender.GetAttribute(gameValues.adminattr)) return;

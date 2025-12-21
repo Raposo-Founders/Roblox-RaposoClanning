@@ -51,7 +51,10 @@ function SearchTargetEntity(environment: T_EntityEnvironment, caller: PlayerEnti
   for (const ent of environment.getEntitiesThatIsA("CapturePointEntity")) {
     if (ent.current_team === caller.team) continue;
 
-    currentTarget = ent;
+    const linkedTrigger = environment.namedEntities.get(ent.linkedTrigger);
+    if (linkedTrigger && linkedTrigger.IsA("TriggerEntity"))
+      currentTarget = linkedTrigger;
+
     break;
   }
 

@@ -2,8 +2,6 @@ import { PlayerTeam } from "gamevalues";
 import { BufferByteType } from "util/bufferwriter";
 import { registerEntityClass } from ".";
 import BaseEntity from "./BaseEntity";
-import PlayerEntity from "./PlayerEntity";
-import WorldEntity from "./WorldEntity";
 
 declare global {
   interface GameEntities {
@@ -16,7 +14,7 @@ declare global {
 // # Functions
 
 // # Class
-export default class CapturePointEntity extends WorldEntity {
+export default class CapturePointEntity extends BaseEntity {
   readonly classname: keyof GameEntities = "CapturePointEntity";
 
   current_team = PlayerTeam.Spectators;
