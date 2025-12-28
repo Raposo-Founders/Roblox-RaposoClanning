@@ -11,6 +11,7 @@ import { BufferByteType, writeBufferBool, writeBufferVector } from "util/bufferw
 import { DoesInstanceExist } from "util/utilfuncs";
 import { EntityManager, registerEntityClass } from ".";
 import HealthEntity from "./HealthEntity";
+import { UTIL_MATH_ConvertCFrameToVector3 } from "util/math";
 
 // # Types
 declare global {
@@ -20,8 +21,7 @@ declare global {
 }
 
 // # Constants & variables
-const positionDifferenceThreshold = 1;
-const playermodelTweenPositionThreshold = 5;
+const positionDifferenceThreshold = 2;
 const humanoidFetchDescriptionMaxAttempts = 5;
 
 const defaultHumanoidDescription = new Instance( "HumanoidDescription" );
@@ -279,14 +279,6 @@ export default class PlayerEntity extends HealthEntity
 
     this.RegisterNetworkablePropertyHandler( "position", ( ctx, val ) => 
     {
-      const controller = this.GetUserFromController();
-      const netController = this.GetUserFromNetworkOwner();
-      const isLocalPlayer = !this.environment.isPlayback && controller === Players.LocalPlayer;
-      const isLocalBot = !this.environment.isPlayback && netController === Players.LocalPlayer;
-      const isLocalControl = isLocalPlayer || isLocalBot;
-
-      if ( !isLocalControl )
-        this.position = val;
       this.serverPosition = val;
 
       if ( RunService.IsStudio() ) 
@@ -308,14 +300,6 @@ export default class PlayerEntity extends HealthEntity
 
     this.RegisterNetworkablePropertyHandler( "rotation", ( ctx, val ) => 
     {
-      const controller = this.GetUserFromController();
-      const netController = this.GetUserFromNetworkOwner();
-      const isLocalPlayer = !this.environment.isPlayback && controller === Players.LocalPlayer;
-      const isLocalBot = !this.environment.isPlayback && netController === Players.LocalPlayer;
-      const isLocalControl = isLocalPlayer || isLocalBot;
-
-      if ( !isLocalControl )
-        this.rotation = val;
       this.serverRotation = val;
     } );
   }
@@ -330,19 +314,11 @@ export default class PlayerEntity extends HealthEntity
 
     if ( !this.environment.isServer && DoesInstanceExist( this.humanoidModel ) ) 
     {
-
-      if ( isLocalControl && ( this.anchored || this.pendingTeleport ) ) 
-      {
-        this.position = this.serverPosition;
-        this.rotation = this.serverRotation;
-        this.TeleportTo( this.ConvertOriginToCFrame() );
-      }
+      if ( ( isLocalControl && ( this.anchored || this.pendingTeleport ) ) || !isLocalControl )
+        this.TeleportTo( this.serverPosition, this.serverRotation );
 
       this.humanoidModel.HumanoidRootPart.Anchored = isLocalControl && ( this.anchored || this.pendingTeleport || this.health <= 0 );
       this.grounded = isLocalControl && this.health > 0 && this.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
-
-      if ( !isLocalControl )
-        this.TeleportTo( this.ConvertOriginToCFrame() );
     }
   }
 
@@ -445,57 +421,31 @@ export default class PlayerEntity extends HealthEntity
       this.canDealDamage = true;
     } );
 
-    this.TeleportTo( origin );
+    const conversion = UTIL_MATH_ConvertCFrameToVector3( origin );
+
+    this.TeleportTo( conversion.position, conversion.rotation );
     this.spawned.Fire( origin );
   }
 
-  // Teleporting & tweening
-  private currentTween: Tween | undefined;
-
-  TeleportTo( origin: CFrame ) 
+  TeleportTo( position: Vector3, rotation = this.rotation ) 
   {
     const controller = this.GetUserFromController();
     const netController = this.GetUserFromNetworkOwner();
     const isLocalPlayer = !this.environment.isPlayback && !this.environment.isServer && controller === Players.LocalPlayer;
     const isLocalBot = !this.environment.isPlayback && !this.environment.isServer && netController === Players.LocalPlayer;
 
-    const CancelTween = () => 
+    this.position = position;
+    this.rotation = rotation;
+
+    if ( !this.environment.isServer && DoesInstanceExist( this.humanoidModel ) && DoesInstanceExist( this.humanoidModel.PrimaryPart ) ) 
     {
-      if ( this.environment.isServer || !this.humanoidModel ) return;
-      if ( !DoesInstanceExist( this.humanoidModel ) || !DoesInstanceExist( this.humanoidModel.PrimaryPart ) ) return;
+      const modelPosition = this.humanoidModel.PrimaryPart?.Position;
+      const direction = modelPosition.sub( position );
 
-      const currentPosition = this.humanoidModel.PrimaryPart.CFrame;
-
-      if ( this.currentTween?.PlaybackState === Enum.PlaybackState.Playing )
-        this.currentTween?.Cancel();
-      this.currentTween?.Destroy();
-      this.currentTween = undefined;
-
-      this.humanoidModel.PrimaryPart.PivotTo( currentPosition );
-    };
-
-    if ( !this.environment.isServer && DoesInstanceExist( this.humanoidModel ) ) 
-    {
-      const currentPosition = this.humanoidModel.PrimaryPart?.Position || this.position;
-      const direction = currentPosition.sub( origin.Position );
-
-      CancelTween();
-
-      if ( ( isLocalBot || isLocalPlayer ) || direction.Magnitude > playermodelTweenPositionThreshold ) 
-      {
-        this.humanoidModel.PivotTo( origin );
-        this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero;
-      }
-      else 
-      {
-        this.currentTween = TweenService.Create( this.humanoidModel.PrimaryPart!, new TweenInfo( this.environment.lifecycle.tickrate, Enum.EasingStyle.Linear ), { CFrame: this.ConvertOriginToCFrame() } );
-        this.currentTween.Play();
-
-        this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = direction;
-      }
+      this.humanoidModel.PivotTo( this.ConvertOriginToCFrame() );
+      this.humanoidModel.HumanoidRootPart.AssemblyLinearVelocity = ( isLocalBot || isLocalPlayer ) ? Vector3.zero : direction;
     }
 
-    this.position = origin.Position;
     this.pendingTeleport = true;
   }
 
