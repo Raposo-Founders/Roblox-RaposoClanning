@@ -292,7 +292,7 @@ function TeamDisplayContent(props: { Team: PlayerTeam }) {
 
     // Remove invalid entries
     for (const [entityId, root] of mountedContent) {
-      const targetEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[entityId];
+      const targetEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( entityId );
       if (targetEntity?.IsA("PlayerEntity") && targetEntity.team === props.Team) continue;
 
       root.unmount();

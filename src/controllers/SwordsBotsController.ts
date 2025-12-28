@@ -6,7 +6,7 @@ import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
 import { PlayerTeam } from "gamevalues";
 import { RaposoConsole } from "logging";
-import { writeBufferU16 } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
 
 // # Types
@@ -258,9 +258,9 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   {
     if ( !sender ) return;
 
-    const entityId = reader.u16();
+    const entityId = reader.string();
 
-    const entity = env.entity.entities[entityId];
+    const entity = env.entity.entities.get( entityId );
     if ( !entity?.IsA( "SwordPlayerEntity" ) ) return;
     if ( entity.GetUserFromNetworkOwner() !== sender ) 
     {
@@ -296,7 +296,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
       ent.grounded = ent.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
 
       startNetworkPacket( { id: `${NETWORK_REPL_ID}botupd`, context: env.netctx, unreliable: false, } );
-      writeBufferU16( ent.id );
+      writeBufferString( ent.id );
       ent.WriteClientStateBuffer();
       finishNetworkPacket();
     }

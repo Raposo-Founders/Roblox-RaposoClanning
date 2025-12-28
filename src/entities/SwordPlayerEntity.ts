@@ -76,6 +76,8 @@ export class SwordPlayerEntity extends PlayerEntity
 
         if ( val === SwordState.Slash )
           this.SlashAnimation();
+
+        this.stateChanged.Fire( val );
       }
 
       this.currentState = val;
@@ -175,11 +177,6 @@ export class SwordPlayerEntity extends PlayerEntity
         this.currentState = targetState;
         this.lastStateTime = currentTime;
         this.stateChanged.Fire( targetState );
-
-        startNetworkPacket( { id: `${NETWORK_ID}swordState`, context: this.environment.netctx, unreliable: false } );
-        writeBufferU16( this.id );
-        writeBufferU8( targetState );
-        finishNetworkPacket();
       }
 
       // Remove handled attack requests
@@ -311,21 +308,5 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     entity.WriteClientStateBuffer();
 
     finishNetworkPacket();
-  } );
-
-  // Sword / attack changes
-  env.netctx.ListenClient( `${NETWORK_ID}swordState`, reader => 
-  {
-    const entityId = reader.u16();
-    const newState = reader.u8();
-
-    const targetEntity = env.entity.entities[entityId];
-    if ( !targetEntity || !targetEntity.IsA( "SwordPlayerEntity" ) ) return;
-
-    if ( newState === SwordState.Lunge )
-      targetEntity.LungeAnimation();
-
-    if ( newState === SwordState.Slash )
-      targetEntity.SlashAnimation();
   } );
 } );

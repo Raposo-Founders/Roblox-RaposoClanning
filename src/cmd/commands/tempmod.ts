@@ -5,7 +5,7 @@ import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { writeBufferU16 } from "util/bufferwriter";
+import { writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_tempmod";
@@ -20,7 +20,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   {
     if ( !sender || !sender.GetAttribute( gameValues.adminattr ) ) return;
 
-    const entityId = reader.u16();
+    const entityId = reader.string();
 
     let callerEntity: PlayerEntity | undefined;
     for ( const ent of env.entity.getEntitiesThatIsA( "PlayerEntity" ) ) 
@@ -31,7 +31,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     }
     if ( !callerEntity ) return;
 
-    const targetEntity = env.entity.entities[entityId];
+    const targetEntity = env.entity.entities.get( entityId );
     if ( !targetEntity || !targetEntity.IsA( "PlayerEntity" ) ) 
     {
       ChatSystem.sendSystemMessage( `Invalid player entity ${entityId}`, [sender] );
@@ -66,7 +66,7 @@ new ConsoleFunctionCallback( ["tempmod"], [{ name: "player", type: "player" }] )
     for ( const ent of targetPlayers ) 
     {
       startNetworkPacket( {id: CMD_INDEX_NAME, context: ctx.env.netctx, unreliable: false} );
-      writeBufferU16( ent.id );
+      writeBufferString( ent.id );
       finishNetworkPacket();
     }
   } );

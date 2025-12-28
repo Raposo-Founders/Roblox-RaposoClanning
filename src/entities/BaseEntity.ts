@@ -16,7 +16,7 @@ type T_EntityInputListing = { typechecks: readonly t.check<unknown>[], callback:
 
 abstract class BaseEntity 
 {
-  readonly id = ErrorObject<number>( "Entity id cannot be accessed during contruction." );
+  readonly id = ErrorObject<string>( "Entity id cannot be accessed during contruction." );
   readonly name = "";
   readonly environment = ErrorObject<T_GameEnvironment>( "Entity environment cannot be accessed during construction." );
 
@@ -35,7 +35,7 @@ abstract class BaseEntity
   {
     this.inheritanceList.add( "BaseEntity" );
 
-    this.RegisterNetworkableProperty( "id", BufferByteType.u16 );
+    this.RegisterNetworkableProperty( "id", BufferByteType.str );
     this.RegisterNetworkableProperty( "name", BufferByteType.str );
 
     this.OnDelete( () => 

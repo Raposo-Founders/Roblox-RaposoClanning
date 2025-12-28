@@ -195,9 +195,9 @@ class GameEnvironment
 
         // Remove entities
         for ( const entityId of entityChanges.removed )
-          if ( this.entity.entities[entityId] !== undefined ) 
+          if ( this.entity.entities.has( entityId ) ) 
           {
-            this.entity.killThisFucker( this.entity.entities[entityId] );
+            this.entity.killThisFucker( this.entity.entities.get( entityId ) );
           }
 
         // Create new entities
@@ -206,7 +206,7 @@ class GameEnvironment
 
           // Check for the existing entity
           {
-            let existingEntity: BaseEntity | undefined = this.entity.entities[newEntityInfo.id];
+            let existingEntity: BaseEntity | undefined = this.entity.entities.get( newEntityInfo.id );
 
             if ( existingEntity && existingEntity.classname !== newEntityInfo.classname ) 
             {
@@ -223,7 +223,7 @@ class GameEnvironment
         // Synchronize changes
         for ( const [entityId, entityState] of entityChanges.changed ) 
         {
-          const entity = this.entity.entities[entityId];
+          const entity = this.entity.entities.get( entityId );
           if ( !entity ) continue;
 
           for ( const [variableName, valueInfo] of entityState ) 

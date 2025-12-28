@@ -25,7 +25,7 @@ export function CapturePointMeter( props: { entityId: EntityId } )
 
     if ( !entity ) 
     {
-      const searchEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId];
+      const searchEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.entityId );
       if ( !searchEntity || !searchEntity.IsA( "CapturePointEntity" ) ) return;
 
       entity = searchEntity;

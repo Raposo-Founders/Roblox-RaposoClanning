@@ -3,7 +3,6 @@ import React from "@rbxts/react";
 import { Players } from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
-import BaseEntity from "entities/BaseEntity";
 import { cacheFolder } from "folders";
 import { PlayermodelRigManager } from "providers/PlayermodelRigManager";
 import { uiValues } from "UI/values";
@@ -43,14 +42,14 @@ export function HudPlayerPanel()
     if ( !cameraReference.current ) return;
     if ( !viewportReference.current ) return;
 
-    let currentEntityId: EntityId = 0;
+    let currentEntityId: EntityId = "";
     let currentModel: PlayermodelRigManager | undefined;
 
     viewportReference.current.CurrentCamera = cameraReference.current;
 
     GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate( () => 
     {
-      let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[currentEntityId] as BaseEntity | undefined;
+      let playerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( currentEntityId );
       if ( !playerEntity || !playerEntity.IsA( "PlayerEntity" ) || !playerEntity.humanoidModel ) 
       {
         playerEntity = getLocalPlayerEntity( GameEnvironment.GetDefaultEnvironment() );
@@ -61,7 +60,7 @@ export function HudPlayerPanel()
       if ( currentEntityId !== playerEntity.id ) 
       {
         currentEntityId = playerEntity.id;
-        playerEntity.OnDelete( () => currentEntityId = 0 );
+        playerEntity.OnDelete( () => currentEntityId = "" );
 
         playerEntity.died.Connect( () => 
         {

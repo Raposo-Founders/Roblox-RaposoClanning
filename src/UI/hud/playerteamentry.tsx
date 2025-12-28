@@ -1,11 +1,11 @@
 import React, { useEffect } from "@rbxts/react";
 import ReactRoblox from "@rbxts/react-roblox";
 
-import { PlayerTeam } from "gamevalues";
 import { getPlayersFromTeam } from "controllers/PlayerController";
+import GameEnvironment from "core/GameEnvironment";
+import { PlayerTeam } from "gamevalues";
 import countryFlags from "UI/countries";
 import { colorTable, uiValues } from "UI/values";
-import GameEnvironment from "core/GameEnvironment";
 
 // # Constants & variables
 const DEAD_ICON = "rbxassetid://16682879119";
@@ -32,7 +32,7 @@ function ExpandedEntryInfo( props: { visible: React.Binding<boolean>, entityId: 
 
   const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate( () => 
   {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.entityId.getValue() );
     if ( !entity?.IsA( "PlayerEntity" ) ) 
     {
       SetUsername( "" );
@@ -150,7 +150,7 @@ function SmallHealthBar( props: { entityId: React.Binding<EntityId>, visibileMod
 
   const connection = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate( () => 
   {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.entityId.getValue() );
     if ( !entity?.IsA( "PlayerEntity" ) ) 
     {
       SetSize( 0 );
@@ -205,7 +205,7 @@ function PlayerTopTeamEntry( props: { entityId: React.Binding<EntityId>, layoutO
 
   const binding1 = GameEnvironment.GetDefaultEnvironment().lifecycle.BindTickrate( () => 
   {
-    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId.getValue()];
+    const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.entityId.getValue() );
     if ( !entity?.IsA( "PlayerEntity" ) ) 
     {
       SetUserDead( true );
@@ -389,7 +389,7 @@ export function PlayersTopListing( props: { team: keyof typeof PlayerTeam } )
 
         if ( !uiEntryInfo ) 
         {
-          const [entityIdBinding, SetEntityId] = React.createBinding<EntityId>( -1 );
+          const [entityIdBinding, SetEntityId] = React.createBinding<EntityId>( "" );
           const [layoutOrderBinding, SetLayoutOrder] = React.createBinding( 999999 );
 
           const root = ReactRoblox.createRoot( referenceFrame.current, { "hydrate": true } );
@@ -405,7 +405,7 @@ export function PlayersTopListing( props: { team: keyof typeof PlayerTeam } )
 
         if ( !targetPlayer ) 
         {
-          uiEntryInfo.setEntityId( -1 );
+          uiEntryInfo.setEntityId( "" );
           uiEntryInfo.setLayoutOrder( 999 * ( props.team === "Defenders" ? -1 : 1 ) );
 
           continue;

@@ -3,12 +3,11 @@ import { getPlayersFromTeam } from "controllers/PlayerController";
 import GameEnvironment from "core/GameEnvironment";
 import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
-import { PlayerTeam } from "gamevalues";
-import { gameValues } from "gamevalues";
+import { gameValues, PlayerTeam } from "gamevalues";
 import { GetCreatorGroupInfo } from "providers/GroupsProvider";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { finalizeBufferCreation, writeBufferString, writeBufferU16, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU8 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_team";
@@ -23,7 +22,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   {
     if ( !sender || !sender.GetAttribute( gameValues.modattr ) ) return;
 
-    const entityId = reader.u16();
+    const entityId = reader.string();
     const team = reader.u8();
 
     let callerEntity: PlayerEntity | undefined;
@@ -35,7 +34,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     }
     if ( !callerEntity ) return;
 
-    const targetEntity = env.entity.entities[entityId];
+    const targetEntity = env.entity.entities.get( entityId );
     if ( !targetEntity || !targetEntity.IsA( "PlayerEntity" ) ) 
     {
       ChatSystem.sendSystemMessage( `Invalid player entity ${entityId}`, [sender] );
@@ -123,7 +122,7 @@ new ConsoleFunctionCallback( ["team"], [{ name: "player", type: "player" }, { na
     for ( const ent of targetPlayers ) 
     {
       startNetworkPacket( { id: CMD_INDEX_NAME, context: ctx.env.netctx, unreliable: false } );
-      writeBufferU16( ent.id );
+      writeBufferString( ent.id );
       writeBufferU8( PlayerTeam[team] );
       finishNetworkPacket();
     }

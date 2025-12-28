@@ -122,9 +122,9 @@ function MainUpdateCamera( dt: number, env: GameEnvironment )
   let trackingEntity: WorldEntity | undefined;
   let focusPoint = new Vector3();
 
-  if ( t.number( trackingInstance ) ) 
+  if ( t.string( trackingInstance ) ) 
   {
-    const targetEntity = env.entity.entities[trackingInstance];
+    const targetEntity = env.entity.entities.get( trackingInstance );
 
     if ( targetEntity?.IsA( "WorldEntity" ) ) trackingEntity = targetEntity;
     if ( trackingEntity?.IsA( "PlayerEntity" ) && DoesInstanceExist( trackingEntity.humanoidModel ) )

@@ -59,7 +59,7 @@ export function EntityCompareSnapshotVersions( env: T_GameEnvironment, fromSnaps
     // Check if the entity is new
     if ( !fromSnapshot || !fromSnapshot.entities.has( entityId ) ) 
     {
-      const entity = env.entity.entities[entityId];
+      const entity = env.entity.entities.get( entityId );
       if ( !entity ) continue;
 
       entityChanges.new.push( {id: entityId, classname: entity.classname} );
@@ -105,7 +105,7 @@ export function StoreEnvironmentSnapshot( env: T_GameEnvironment )
     acknowledgedClients: new Set(),
   };
 
-  for ( const entity of env.entity.entities )
+  for ( const [, entity] of env.entity.entities )
     snapshot.entities.set( entity.id, entity.GetStateSnapshot() );
 
   existingSnapshots.set( snapshot.id, snapshot );
@@ -162,7 +162,7 @@ export function ReadBufferEntityChanges( reader: ReturnType<typeof BufferReader>
   const newEntitiesAmount = reader.u8();
   for ( let i = 0; i < newEntitiesAmount; i++ ) 
   {
-    const entityId = reader.u16();
+    const entityId = reader.string();
     const classname = reader.string();
 
     content.new.push( { id: entityId, classname: classname as keyof GameEntities } );
@@ -172,7 +172,7 @@ export function ReadBufferEntityChanges( reader: ReturnType<typeof BufferReader>
   const changesAmount = reader.u8();
   for ( let i = 0; i < changesAmount; i++ ) 
   {
-    const entityId = reader.u16();
+    const entityId = reader.string();
     const valuesAmount = reader.u8();
     const entityMap = content.changed.get( entityId ) || new Map();
 
@@ -209,7 +209,7 @@ export function ReadBufferEntityChanges( reader: ReturnType<typeof BufferReader>
   const removedEntities = reader.u8();
   for ( let i = 0; i < removedEntities; i++ ) 
   {
-    const entityId = reader.u16();
+    const entityId = reader.string();
 
     content.removed.push( entityId );
   }
@@ -223,7 +223,7 @@ export function WriteEntityBufferChanges( states: I_EntityChanges )
   BufferWriter.writeBufferU8( states.new.size() );
   for ( const ent of states.new ) 
   {
-    BufferWriter.writeBufferU16( ent.id );
+    BufferWriter.writeBufferString( ent.id );
     BufferWriter.writeBufferString( ent.classname );
   }
 
@@ -231,7 +231,7 @@ export function WriteEntityBufferChanges( states: I_EntityChanges )
   BufferWriter.writeBufferU8( states.changed.size() ); // This limits it to only 255 changes, dickhead
   for ( const [entityId, entityValues] of states.changed ) 
   {
-    BufferWriter.writeBufferU16( entityId );
+    BufferWriter.writeBufferString( entityId );
     BufferWriter.writeBufferU8( entityValues.size() );
 
     for ( const [variableName, variableState] of entityValues ) 
@@ -246,7 +246,7 @@ export function WriteEntityBufferChanges( states: I_EntityChanges )
   // Write removed entities
   BufferWriter.writeBufferU8( states.removed.size() );
   for ( const entityId of states.removed )
-    BufferWriter.writeBufferU16( entityId );
+    BufferWriter.writeBufferString( entityId );
 }
 
 // # Class

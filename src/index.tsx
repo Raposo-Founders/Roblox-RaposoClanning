@@ -6,12 +6,11 @@ import { UpdateCameraLoop } from "controllers/CameraController";
 import GameEnvironment from "core/GameEnvironment";
 import { requireEntities } from "entities";
 import { modulesFolder, uiFolder } from "folders";
-import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
 import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
 import StartSystems from "systems";
-import ChatSystem from "systems/ChatSystem";
 import { CommandLine } from "UI/cmdline";
+import { OnScreenLogging } from "UI/debug/onscreenlog";
 import { FairzoneCounter } from "UI/hud/fairzonetimer";
 import { FairzoneTopDisplay } from "UI/hud/fairzonetopdisplay";
 import { KillfeedDisplay } from "UI/hud/killfeedDisplay";
@@ -117,7 +116,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   }
 
   env.lifecycle.BindTickrate((_, dt) => {
-    for (const ent of env.entity.entities) {
+    for (const [, ent] of env.entity.entities) {
       const [success, message] = pcall(() => ent.Think(dt));
       if (success) continue;
 
@@ -218,6 +217,8 @@ if (RunService.IsClient()) {
     {/* <ChatBar /> */}
     {/* <ChatButton /> */}
     {/* <ChatWindow /> */}
+
+    <OnScreenLogging />
   </>);
 
   // Import interface from storage and execute modules

@@ -10,7 +10,7 @@ import { colorTable } from "UI/values";
 // # Functions
 function PlayerFrame( props: { entityId: EntityId, layoutOrder: number } ) 
 {
-  const entity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.entityId];
+  const entity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.entityId );
   if ( !entity?.IsA( "PlayerEntity" ) ) return <></>;
 
   const controller = entity.GetUserFromController();
@@ -57,8 +57,8 @@ function PlayerFrame( props: { entityId: EntityId, layoutOrder: number } )
 
 function KillfeedPost( props: { KillerEntityId: EntityId, distance: number, VictimEntityId: EntityId } ) 
 {
-  const killerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.KillerEntityId];
-  const victimEntity = GameEnvironment.GetDefaultEnvironment().entity.entities[props.VictimEntityId];
+  const killerEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.KillerEntityId );
+  const victimEntity = GameEnvironment.GetDefaultEnvironment().entity.entities.get( props.VictimEntityId );
 
   if ( !killerEntity?.IsA( "PlayerEntity" ) || !victimEntity?.IsA( "PlayerEntity" ) )
     return <></>;
@@ -118,8 +118,8 @@ export function KillfeedDisplay()
     if ( !parentFrameReference.current ) return;
 
     const distance = reader.f32();
-    const attackerEntityId = reader.u16();
-    const victimEntityId = reader.u16();
+    const attackerEntityId = reader.string();
+    const victimEntityId = reader.string();
 
     const root = ReactRoblox.createRoot( parentFrameReference.current, { hydrate: true } );
     root.render( <KillfeedPost KillerEntityId={attackerEntityId} VictimEntityId={victimEntityId} distance={distance} /> );

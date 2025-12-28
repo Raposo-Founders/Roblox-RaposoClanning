@@ -2,6 +2,8 @@ import { t } from "@rbxts/t";
 import { RaposoConsole } from "logging";
 import Signal from "util/signal";
 import BaseEntity from "./BaseEntity";
+import { RandomString } from "util/utilfuncs";
+import { HttpService } from "@rbxts/services";
 
 // # Types
 declare global {
@@ -49,7 +51,7 @@ export function requireEntities()
 // # Class
 export class EntityManager 
 {
-  readonly entities: BaseEntity[] = [];
+  readonly entities = new Map<EntityId, BaseEntity>();
   readonly namedEntities = new Map<string, BaseEntity>();
   readonly entityCreated = new Signal<[Entity: BaseEntity]>();
   readonly entityDeleting = new Signal<[Entity: BaseEntity]>();
@@ -57,7 +59,7 @@ export class EntityManager
   constructor( public environment: T_GameEnvironment ) 
   { }
 
-  async CreateEntityByName<K extends keyof GameEntities>( classname: K ): Promise<EntityType<K>> 
+  async CreateEntityByName<K extends keyof GameEntities>( classname: K, entityId: EntityId = HttpService.GenerateGUID( false ) ): Promise<EntityType<K>> 
   {
     const entity_constructor = entitiesBuildList.get( classname );
     assert( entity_constructor, `Attempt to create unknown entity: "${classname}"` );
@@ -66,8 +68,8 @@ export class EntityManager
 
     const entity = new entity_constructor();
 
-    this.entities.push( entity );
-    rawset( entity, "id", this.entities.findIndex( val => val === entity ) );
+    this.entities.set( entityId, entity );
+    rawset( entity, "id", entityId );
     rawset( entity, "environment", this.environment );
 
     for ( const callback of entity.setupFinishedCallbacks )
@@ -83,14 +85,12 @@ export class EntityManager
   {
     if ( !t.table( entity ) ) return;
     if ( !this.isEntityOnMemoryOrImSchizo( entity ) ) return;
-    if ( !t.number( rawget( entity, "id" ) as EntityId ) )
+    if ( !t.string( rawget( entity, "id" ) as EntityId ) )
       throw `This s### is an invalid entity. ${entity.classname} ${entity.id}`;
 
     print( `Killing entity ${entity.classname} ${entity.id}` );
 
-    const entityIndex = this.entities.findIndex( val => val === entity );
-    if ( entityIndex > -1 )
-      rawset( this.entities, entityIndex + 1, undefined );
+    this.entities.delete( entity.id );
     this.namedEntities.delete( entity.name );
     this.entityDeleting.Fire( entity );
 
@@ -142,7 +142,7 @@ export class EntityManager
 
   isEntityOnMemoryOrImSchizo( entity: BaseEntity | undefined ): boolean 
   {
-    return t.any( entity ) && t.table( entity ) && t.number( rawget( entity, "id" ) ) && this.entities.findIndex( ent => ent === entity ) > -1;
+    return t.any( entity ) && t.table( entity ) && t.string( rawget( entity, "id" ) ) && this.entities.get( entity.id ) === entity;
   }
 
   getEntitiesThatIsA<K extends keyof GameEntities, E extends GameEntities[K]>( classname: K ): E["prototype"][] 
@@ -151,7 +151,15 @@ export class EntityManager
     if ( !registeredEntityClassnames.has( classname ) )
       throw `Invalid entity classname: ${classname}`;
 
-    return this.entities.filter( val => val.IsA( classname ) ) as ( E["prototype"] )[];
+    const foundList: E["prototype"][] = [];
+
+    for ( const [, ent] of this.entities )
+    {
+      if ( ent.IsA( classname ) )
+        foundList.push( ent as unknown as E["prototype"] );
+    }
+
+    return foundList;
   }
 
   getEntitiesOfClass<K extends keyof GameEntities, E extends GameEntities[K]>( classname: K ): ( E["prototype"] )[] 
@@ -160,28 +168,43 @@ export class EntityManager
     if ( !registeredEntityClassnames.has( classname ) )
       throw `Invalid entity classname: ${classname}`;
 
-    return this.entities.filter( val => val.classname === classname ) as ( E["prototype"] )[];
+    const foundList: E["prototype"][] = [];
+
+    for ( const [, ent] of this.entities )
+    {
+      if ( ent.classname === classname )
+        foundList.push( ent as unknown as E["prototype"] );
+    }
+
+    return foundList;
   }
 
   getEntitiesFromInstance( inst: Instance ) 
   {
-    return this.entities.filter( ent => 
+    const foundList: BaseEntity[] = [];
+
+    for ( const [, ent] of this.entities )
     {
-      if ( ent.associatedInstances.has( inst ) ) return true;
+      if ( ent.associatedInstances.has( inst ) )
+      {
+        foundList.push( ent );
+        continue;
+      }
 
       for ( const associatedInstance of ent.associatedInstances ) 
       {
         if ( !inst.IsDescendantOf( associatedInstance ) ) continue;
-        return true;
+        foundList.push( ent );
+        break;
       }
+    }
 
-      return false;
-    } );
+    return foundList;
   }
 
   murderAllFuckers() 
   {
-    for ( const ent of this.entities )
+    for ( const [, ent] of this.entities )
       this.killThisFucker( ent );
   }
 }

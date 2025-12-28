@@ -1,6 +1,5 @@
 import { t } from "@rbxts/t";
 import BaseEntity from "entities/BaseEntity";
-import WorldProvider from "providers/WorldProvider";
 
 /* -------------------------------------------------------------------------- */
 /*                                  Functions                                 */
@@ -52,7 +51,7 @@ export function generateTracelineParameters<B extends boolean, T extends B exten
 
   // Filter entities
   if ( searchEntities.size() > 0 || ignoreEntities.size() > 0 )
-    for ( const entity of entitiesEnvironment.entities ) 
+    for ( const [, entity] of entitiesEnvironment.entities ) 
     {
       if ( searchEntities.size() > 0 && !IsEntityListed( entity, searchEntities ) ) continue;
       if ( ignoreEntities.size() > 0 && IsEntityListed( entity, ignoreEntities ) ) continue;

@@ -6,7 +6,7 @@ import PlayerEntity from "entities/PlayerEntity";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { writeBufferU16, writeBufferU32 } from "util/bufferwriter";
+import { writeBufferString, writeBufferU32 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_damage";
@@ -21,7 +21,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   {
     if ( !sender || !sender.GetAttribute( gameValues.modattr ) ) return;
 
-    const entityId = reader.u16();
+    const entityId = reader.string();
     const amount = reader.u32();
 
     let callerEntity: PlayerEntity | undefined;
@@ -33,7 +33,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     }
     if ( !callerEntity ) return;
 
-    const targetEntity = env.entity.entities[entityId];
+    const targetEntity = env.entity.entities.get( entityId );
     if ( !targetEntity || !targetEntity.IsA( "PlayerEntity" ) ) 
     {
       ChatSystem.sendSystemMessage( `Invalid player entity ${entityId}`, [sender] );
@@ -69,7 +69,7 @@ new ConsoleFunctionCallback( ["damage", "dmg"], [{ name: "player", type: "player
     for ( const ent of targetPlayers ) 
     {
       startNetworkPacket( { id: CMD_INDEX_NAME, context: ctx.env.netctx, unreliable: false } );
-      writeBufferU16( ent.id );
+      writeBufferString( ent.id );
       writeBufferU32( amount as number );
       finishNetworkPacket();
     }

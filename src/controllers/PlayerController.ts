@@ -5,7 +5,7 @@ import PlayerEntity from "entities/PlayerEntity";
 import { gameValues, PlayerTeam } from "gamevalues";
 import { sendSystemMessage } from "systems/ChatSystem";
 import { ClanwareCaseSystem } from "systems/ClanwareCaseSystem";
-import { writeBufferF32, writeBufferU16 } from "util/bufferwriter";
+import { writeBufferF32, writeBufferString } from "util/bufferwriter";
 
 // # Constants & variables
 const TARGET_GROUP = 7203437 as const;
@@ -65,8 +65,8 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
 
           startNetworkPacket( { id: "game_killfeed", context: env.netctx, unreliable: false } );
           writeBufferF32( distance );
-          writeBufferU16( attacker.id );
-          writeBufferU16( ent.id );
+          writeBufferString( attacker.id );
+          writeBufferString( ent.id );
           finishNetworkPacket();
         }
 
