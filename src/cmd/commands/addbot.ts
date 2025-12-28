@@ -1,7 +1,7 @@
 import { Players } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
 import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
@@ -19,16 +19,16 @@ new ConsoleFunctionCallback( ["addbot"], [{ name: "name", type: "string" }] )
   {
     const entityName = ctx.getArgument( "name", "string" );
 
-    const packet = new NetworkPacket( CMD_INDEX_NAME );
+    startNetworkPacket( { id: CMD_INDEX_NAME, context: ctx.env.netctx, players: [], ignore: [], unreliable: false } );
     writeBufferString( entityName.value );
-    ctx.env.network.SendPacket( packet );
+    finishNetworkPacket();
   } );
 
 GameEnvironment.BindCallbackToEnvironmentCreation( env => 
 {
   if ( !env.isServer ) return;
 
-  env.network.ListenPacket( CMD_INDEX_NAME, ( sender, reader ) => 
+  env.netctx.ListenServer( CMD_INDEX_NAME, ( sender, reader ) => 
   {
     if ( !sender ) return;
 

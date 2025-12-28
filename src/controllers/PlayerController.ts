@@ -1,12 +1,11 @@
 import { LocalizationService, Players, RunService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
-import { PlayerTeam } from "gamevalues";
-import { gameValues } from "gamevalues";
+import { gameValues, PlayerTeam } from "gamevalues";
 import { sendSystemMessage } from "systems/ChatSystem";
 import { ClanwareCaseSystem } from "systems/ClanwareCaseSystem";
-import { writeBufferF32, writeBufferI16, writeBufferString, writeBufferU16 } from "util/bufferwriter";
+import { writeBufferF32, writeBufferU16 } from "util/bufferwriter";
 
 // # Constants & variables
 const TARGET_GROUP = 7203437 as const;
@@ -64,11 +63,11 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
         {
           const distance = ent.position.sub( attacker.position ).Magnitude;
 
-          const packet = new NetworkPacket( "game_killfeed" );
+          startNetworkPacket( { id: "game_killfeed", context: env.netctx, unreliable: false } );
           writeBufferF32( distance );
           writeBufferU16( attacker.id );
           writeBufferU16( ent.id );
-          env.network.SendPacket( packet );
+          finishNetworkPacket();
         }
 
         task.wait( Players.RespawnTime );

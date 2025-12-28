@@ -1,16 +1,16 @@
-import { CollectionService, Players, ReplicatedStorage } from "@rbxts/services";
+import { CollectionService, Players, ReplicatedStorage, RunService } from "@rbxts/services";
+import { t } from "@rbxts/t";
 import { LifecycleContainer } from "core/GameLifecycle";
 import { EntityCompareSnapshotVersions, GetLatestClientAknowledgedSnapshot, GetSnapshotsFromEnvironmentId, ReadBufferEntityChanges, StoreEnvironmentSnapshot, WriteEntityBufferChanges } from "core/Snapshot";
+import BaseEntity from "entities/BaseEntity";
 import { RaposoConsole } from "logging";
+import { UTIL_MATH_ConvertCFrameToVector3 } from "util/math";
 import { EntityManager } from "../entities";
-import { Gamemode, gameValues } from "../gamevalues";
+import { defaultNetworkContext, Gamemode, gameValues } from "../gamevalues";
 import { writeBufferString } from "../util/bufferwriter";
 import Signal from "../util/signal";
 import { RandomString, ReplicatedInstance } from "../util/utilfuncs";
-import { NetworkDataStreamer, NetworkPacket, SendStandardMessage } from "./NetworkModel";
-import BaseEntity from "entities/BaseEntity";
-import { UTIL_MATH_ConvertCFrameToVector3 } from "util/math";
-import { t } from "@rbxts/t";
+import { finishNetworkPacket, NetworkContext, startNetworkPacket } from "./Network";
 
 // # Types
 type T_EnvironmentBinding = ( env: GameEnvironment ) => void;
@@ -47,7 +47,7 @@ class GameEnvironment
     gamemode: Gamemode.KingOfTheHill,
   };
 
-  readonly network = new NetworkDataStreamer();
+  readonly netctx: NetworkContext;
   readonly entity = new EntityManager( this );
   readonly lifecycle = new LifecycleContainer();
 
@@ -60,8 +60,9 @@ class GameEnvironment
 
     this.connections.push( Players.PlayerRemoving.Connect( user => this.RemovePlayer( user, "Left the game." ) ) );
 
-    this.network.shouldDeliverPacket = sender => this.players.has( sender );
-    this.network.ListenPacket( "disconnect_request", sender => 
+    this.netctx = new NetworkContext( id, user => RunService.IsClient() || this.players.has( user ) );
+    this.netctx.isServer = isServer;
+    this.netctx.ListenServer( "disconnect_request", sender => 
     {
       if ( !sender ) return;
       this.RemovePlayer( sender, "Disconnected by user." );
@@ -142,15 +143,14 @@ class GameEnvironment
           const lastClientSnapshot = GetLatestClientAknowledgedSnapshot( this.id, client );
           const differenceSnapshot = EntityCompareSnapshotVersions( this, lastClientSnapshot, currentSnapshot );
 
-          const packetConfig = new NetworkPacket( "gameenv_repl" );
-          packetConfig.reliable = false;
-          packetConfig.players = [client];
+          startNetworkPacket( { id: "gameenv_repl", context: this.netctx, unreliable: true, players: [client], ignore: [] } );
 
           writeBufferString( currentSnapshot.id );
           writeBufferString( lastClientSnapshot?.id ?? "0" );
           WriteEntityBufferChanges( differenceSnapshot );
 
-          this.network.SendPacket( packetConfig );
+          finishNetworkPacket();
+
         }
 
         // Eliminate old snapshots
@@ -168,7 +168,7 @@ class GameEnvironment
         }
       } );
 
-      this.network.ListenPacket( "gameenv_snap_ack", ( sender, reader ) => 
+      this.netctx.ListenServer( "gameenv_snap_ack", ( sender, reader ) => 
       {
         if ( !sender ) return;
 
@@ -186,7 +186,7 @@ class GameEnvironment
 
     if ( !isServer ) 
     {
-      this.network.ListenPacket( "gameenv_repl", ( _, reader ) => 
+      this.netctx.ListenClient( "gameenv_repl", reader => 
       {
         const currentSnapshotId = reader.string();
         const referenceSnapshotId = reader.string();
@@ -245,12 +245,11 @@ class GameEnvironment
         }
 
         // Acknowledge snapshot
-        const packetConfig = new NetworkPacket( "gameenv_snap_ack" );
-        packetConfig.reliable = false;
+        startNetworkPacket( { id: "gameenv_snap_ack", context: this.netctx, players: [], ignore: [], unreliable: true } );
 
         writeBufferString( currentSnapshotId );
 
-        this.network.SendPacket( packetConfig );
+        finishNetworkPacket();
       } );
     }
   }
@@ -265,7 +264,7 @@ class GameEnvironment
     for ( const user of this.players )
       this.RemovePlayer( user, "Instance closing." );
 
-    this.network.Destroy();
+    this.netctx.Destroy();
 
     task.wait( 1 );
 
@@ -313,7 +312,12 @@ class GameEnvironment
     print( `${player.Name} has left the server ${this.id}. (${disconnectreason})` );
     player.SetAttribute( gameValues.usersessionid, undefined );
 
-    SendStandardMessage( "server_disconnected", { disconnectreason }, player );
+    // TODO: Send a notification to the player. (when the main menu is added)
+    // SendStandardMessage( "server_disconnected", { disconnectreason }, player );
+
+    startNetworkPacket( { id: "session_disconnected", context: defaultNetworkContext, players: [player], unreliable: false } );
+    writeBufferString( disconnectreason );
+    finishNetworkPacket();
 
     this.players.delete( player );
     this.playerLeft.Fire( player, disconnectreason );

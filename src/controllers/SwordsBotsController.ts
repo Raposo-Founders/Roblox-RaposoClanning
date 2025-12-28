@@ -1,14 +1,13 @@
 import { Players } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
-
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
-import { PlayerTeam } from "gamevalues";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
 import WorldEntity from "entities/WorldEntity";
+import { PlayerTeam } from "gamevalues";
 import { RaposoConsole } from "logging";
+import { writeBufferU16 } from "util/bufferwriter";
 import { DoesInstanceExist } from "util/utilfuncs";
-import { writeBufferString, writeBufferU16 } from "util/bufferwriter";
 
 // # Types
 interface BotAdvanceSuggestionResult {
@@ -255,7 +254,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     if ( !ent.IsA( "SwordPlayerEntity" ) ) return;
   } );
 
-  env.network.ListenPacket( `${NETWORK_REPL_ID}botupd`, ( sender, reader ) => 
+  env.netctx.ListenServer( `${NETWORK_REPL_ID}botupd`, ( sender, reader ) => 
   {
     if ( !sender ) return;
 
@@ -296,10 +295,10 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
       ent.velocity = ent.humanoidModel.HumanoidRootPart?.AssemblyLinearVelocity ?? new Vector3();
       ent.grounded = ent.humanoidModel.Humanoid.FloorMaterial.Name !== "Air";
 
-      const packet = new NetworkPacket( `${NETWORK_REPL_ID}botupd` );
+      startNetworkPacket( { id: `${NETWORK_REPL_ID}botupd`, context: env.netctx, unreliable: false, } );
       writeBufferU16( ent.id );
       ent.WriteClientStateBuffer();
-      env.network.SendPacket( packet );
+      finishNetworkPacket();
     }
   } );
 } );

@@ -1,7 +1,7 @@
 import * as Services from "@rbxts/services";
 import { getLocalPlayerEntity } from "controllers/LocalEntityController";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import { gameValues } from "gamevalues";
 import { RaposoConsole } from "logging";
 import { SoundsPath, SoundSystem } from "systems/SoundSystem";
@@ -176,11 +176,10 @@ export class SwordPlayerEntity extends PlayerEntity
         this.lastStateTime = currentTime;
         this.stateChanged.Fire( targetState );
 
-        const packet = new NetworkPacket( `${NETWORK_ID}swordState` );
-        packet.reliable = false;
+        startNetworkPacket( { id: `${NETWORK_ID}swordState`, context: this.environment.netctx, unreliable: false } );
         writeBufferU16( this.id );
         writeBufferU8( targetState );
-        this.environment.network.SendPacket( packet );
+        finishNetworkPacket();
       }
 
       // Remove handled attack requests
@@ -242,13 +241,13 @@ export class SwordPlayerEntity extends PlayerEntity
     }
   }
 
-  AttackRequest( attackTime = time() ) 
+  AttackRequest( attackTime = time() )
   {
-    if ( !this.environment.isServer ) 
+    if ( !this.environment.isServer )
     {
-      const packet = new NetworkPacket( `${NETWORK_ID}c_activate` );
+      startNetworkPacket( { id: `${NETWORK_ID}c_activate`, context: this.environment.netctx, players: [], ignore: [], unreliable: false } );
       writeBufferF32( time() );
-      this.environment.network.SendPacket( packet );
+      finishNetworkPacket();
       return;
     }
 
@@ -268,7 +267,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   if ( !env.isServer ) return;
 
   // Activation requests
-  env.network.ListenPacket( `${NETWORK_ID}c_activate`, ( sender, reader ) => 
+  env.netctx.ListenServer( `${NETWORK_ID}c_activate`, ( sender, reader ) => 
   {
     if ( !sender ) return;
 
@@ -281,7 +280,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   } );
 
   // Client state updating
-  env.network.ListenPacket( `${NETWORK_ID}c_stateupd`, ( sender, reader ) => 
+  env.netctx.ListenServer( `${NETWORK_ID}c_stateupd`, ( sender, reader ) => 
   {
     if ( !sender ) return;
 
@@ -307,15 +306,15 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     const entity = getLocalPlayerEntity( env );
     if ( !entity || !entity.IsA( "SwordPlayerEntity" ) || entity.health <= 0 ) return;
 
-    const packet = new NetworkPacket( `${NETWORK_ID}c_stateupd` );
-    packet.reliable = true;
+    startNetworkPacket( { id: `${NETWORK_ID}c_stateupd`, context: env.netctx, players: [], ignore: [], unreliable: false } );
 
     entity.WriteClientStateBuffer();
-    env.network.SendPacket( packet );
+
+    finishNetworkPacket();
   } );
 
   // Sword / attack changes
-  env.network.ListenPacket( `${NETWORK_ID}swordState`, ( sender, reader ) => 
+  env.netctx.ListenClient( `${NETWORK_ID}swordState`, reader => 
   {
     const entityId = reader.u16();
     const newState = reader.u8();

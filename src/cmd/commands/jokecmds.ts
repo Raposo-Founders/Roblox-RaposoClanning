@@ -1,6 +1,6 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import { gameValues } from "gamevalues";
 import ChatSystem from "systems/ChatSystem";
 import { writeBufferString } from "util/bufferwriter";
@@ -14,7 +14,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
 {
   if ( !env.isServer ) return;
 
-  env.network.ListenPacket( CMD_INDEX_NAME, ( sender, reader ) => 
+  env.netctx.ListenServer( CMD_INDEX_NAME, ( sender, reader ) => 
   {
     if ( !sender || !sender.GetAttribute( gameValues.modattr ) ) return;
 
@@ -25,7 +25,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
 new ConsoleFunctionCallback( ["fly", "ff", "forcefield", "invisible", "invis", "god", "to", "bring"], [] )
   .setCallback( ( ctx ) => 
   {
-    const packet = new NetworkPacket( CMD_INDEX_NAME );
+    startNetworkPacket( { id: CMD_INDEX_NAME, context: ctx.env.netctx, unreliable: false } );
     writeBufferString( "joke" );
-    ctx.env.network.SendPacket( packet );
+    finishNetworkPacket();
   } );

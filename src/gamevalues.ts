@@ -1,3 +1,6 @@
+import { Players } from "@rbxts/services";
+import { NetworkContext } from "core/Network";
+
 const stringValues = new ReadonlyMap<string, string>( [
   ["USER_CMD_MISSING_ADMIN", "You must have admin privileges to run this command."],
   ["USER_CMD_MISSING_MOD", "You must have moderation privileges to run this command."],
@@ -14,6 +17,8 @@ export const gameValues = {
   cmdprefix: ":",
   cmdtempmoddefendersdeny: "Temporary moderators can't mess with the Defenders' team.",
 } as const;
+
+export const defaultNetworkContext = new NetworkContext( "raposo", user => user.IsDescendantOf( Players ) );
 
 export function getStringMappedValue( name: string ) 
 {

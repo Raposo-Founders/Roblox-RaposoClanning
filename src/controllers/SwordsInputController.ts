@@ -2,7 +2,6 @@ import { ContextActionService, RunService, UserInputService } from "@rbxts/servi
 import GameEnvironment from "core/GameEnvironment";
 import { IsCameraShiftlockEnabled, SetCameraShiftLockEnabled } from "./CameraController";
 import { getLocalPlayerEntity } from "./LocalEntityController";
-import { NetworkPacket } from "core/NetworkModel";
 
 // # Variables
 let swordsAutoAttack = false;

@@ -1,7 +1,7 @@
 import ColorUtils from "@rbxts/colour-utils";
 import { Players, RunService, TweenService } from "@rbxts/services";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkDataStreamer, NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, NetworkContext, startNetworkPacket } from "core/Network";
 import BaseEntity from "entities/BaseEntity";
 import HealthEntity from "entities/HealthEntity";
 import { SwordPlayerEntity, SwordState } from "entities/SwordPlayerEntity";
@@ -55,16 +55,16 @@ function CheckPlayers<T extends BaseEntity>( entity1: SwordPlayerEntity, entity2
   return true;
 }
 
-function ClientWriteNetworkHit( network: NetworkDataStreamer, mode: NetworkSwordHitIndex, attacker: EntityId, victim: EntityId ) 
+function ClientWriteNetworkHit( networkContext: NetworkContext, mode: NetworkSwordHitIndex, attacker: EntityId, victim: EntityId ) 
 {
-  const packet = new NetworkPacket( `${NETWORK_ID}hit` );
+  startNetworkPacket( { id: `${NETWORK_ID}hit`, context: networkContext, unreliable: false } );
   writeBufferU8( mode );
   writeBufferU16( attacker );
   writeBufferU16( victim );
-  network.SendPacket( packet );
+  finishNetworkPacket();
 }
 
-function ClientHandleHitboxTouched( attacker: SwordPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkDataStreamer ) 
+function ClientHandleHitboxTouched( attacker: SwordPlayerEntity, target: HealthEntity, part: BasePart, network: NetworkContext ) 
 {
   const spawnHitHighlight = ( color: string ) => 
   {
@@ -170,7 +170,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
   if ( !env.isServer ) return;
 
   // Listening for damage
-  env.network.ListenPacket( `${NETWORK_ID}hit`, ( sender, reader ) => 
+  env.netctx.ListenServer( `${NETWORK_ID}hit`, ( sender, reader ) => 
   {
     if ( !sender ) return;
 
@@ -268,7 +268,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
         if ( time() - lastHitTime < 0.06 ) continue;
         lastEntitiesHitTime.set( entity.id, time() );
 
-        ClientHandleHitboxTouched( ent, entity, other, env.network );
+        ClientHandleHitboxTouched( ent, entity, other, env.netctx );
       }
     };
 

@@ -113,7 +113,7 @@ export function KillfeedDisplay()
 {
   const parentFrameReference = createRef<Frame>();
 
-  GameEnvironment.GetDefaultEnvironment().network.ListenPacket( "game_killfeed", ( sender, reader ) => 
+  GameEnvironment.GetDefaultEnvironment().netctx.ListenClient( "game_killfeed", reader => 
   {
     if ( !parentFrameReference.current ) return;
 

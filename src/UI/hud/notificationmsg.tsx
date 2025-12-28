@@ -4,7 +4,7 @@ import ReactRoblox from "@rbxts/react-roblox";
 import { Players, TextService, TweenService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
 import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
@@ -212,16 +212,16 @@ new ConsoleFunctionCallback( ["shout", "message", "m"], [{ name: "message", type
   {
     ctx.Reply( "Message shouted." );
 
-    const packet = new NetworkPacket( "message_shout" );
+    startNetworkPacket( { id: "message_shout", context: ctx.env.netctx, players: [], ignore: [], unreliable: false } );
     writeBufferString( ctx.getArgument( "message", "strings" ).value.join( " " ) );
-    ctx.env.network.SendPacket( packet );
+    finishNetworkPacket();
   } );
 
 GameEnvironment.BindCallbackToEnvironmentCreation( env => 
 {
   if ( !env.isServer ) return;
 
-  env.network.ListenPacket( "message_shout", ( sender, reader ) => 
+  env.netctx.ListenServer( "message_shout", ( sender, reader ) => 
   {
     if ( !sender ) return;
     if ( !sender.GetAttribute( gameValues.modattr ) ) return;
@@ -229,11 +229,11 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
     const message = reader.string();
     const filteredMessage = TextService.FilterStringAsync( message, sender.UserId, "PublicChat" );
 
-    const packet = new NetworkPacket( "message_shouted" );
+    startNetworkPacket( { id: "message_shouted", context: env.netctx, unreliable: false } );
     writeBufferString( tostring( sender.UserId ) );
     writeBufferString( tostring( sender.GetAttribute( gameValues.usersessionid ) ) );
     writeBufferString( filteredMessage.GetNonChatStringForBroadcastAsync() );
-    env.network.SendPacket( packet );
+    finishNetworkPacket();
   } );
 } );
 
@@ -242,7 +242,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
 {
   if ( env.isServer ) return;
 
-  env.network.ListenPacket( "message_shouted", ( sender, reader ) => 
+  env.netctx.ListenClient( "message_shouted", reader => 
   {
     const userId = tonumber( reader.string() ) ?? 1;
     const userSessionId = reader.string();

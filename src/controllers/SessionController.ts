@@ -1,37 +1,30 @@
 import { Players, RunService } from "@rbxts/services";
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import GameEnvironment from "core/GameEnvironment";
-import { ListenStandardMessage, SendStandardMessage } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import { clientSessionConnected, clientSessionDisconnected } from "defaultinsts";
+import { defaultNetworkContext } from "gamevalues";
 import { RaposoConsole } from "logging";
-import { BufferReader } from "util/bufferreader";
-import { finalizeBufferCreation, startBufferCreation, writeBufferString, writeBufferU64, writeBufferU8 } from "util/bufferwriter";
+import { writeBufferBool, writeBufferString, writeBufferU8 } from "util/bufferwriter";
 import Signal from "util/signal";
 
-// # Interfaces & types
-interface ServerListingInfo {
-  sessionId: string;
-  players: Player[];
-}
-
 // # Constants & variables
-enum SessionConnectionIds {
-  servercon_FetchServers, // Only used for... you know what, so whatever
-  servercon_Request,
-  servercon_GetInfo,
-  servercon_MapReady,
+enum ConnectionSteps {
+  JoinRequest,
+  Ready,
 }
 
-const CONNECTION_STEP_COOLDOWN = 0.5;
+const SERVER_CONNECTION_ID = "serverconnection";
+
+const CONNECTION_STEP_COOLDOWN = 3;
 const DISCONNECT_LOCAL = new Signal();
-const usersInConnectionProcess = new Set<Player>();
+const usersInConnectionProcess = new Set<Player["UserId"]>();
 
 let canConnect = true;
 let currentConnectionThread: thread | undefined;
-let currentServerListFetchThread: thread | undefined;
 
 // # Functions
-export function clientConnectToServerSession( sessionId: string ) 
+export function clientConnectToServerSession()
 {
   assert( RunService.IsClient(), "Function can only be called from the client." );
   assert( canConnect, "Function is on cooldown." );
@@ -41,28 +34,51 @@ export function clientConnectToServerSession( sessionId: string )
   canConnect = false;
   currentConnectionThread = coroutine.running();
 
-  print( "Requesting connection to session:", sessionId );
+  print( "Requesting connection to server..." );
+  
+  startNetworkPacket( { id: SERVER_CONNECTION_ID, context: defaultNetworkContext, unreliable: false } );
+  writeBufferU8( ConnectionSteps.JoinRequest );
+  finishNetworkPacket();
 
-  SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], { sessionId }, undefined );
-
-  const [connectionAllowed, negativeReason] = coroutine.yield() as LuaTuple<[boolean, string]>;
-  if ( !connectionAllowed ) 
   {
-    RaposoConsole.Warn( `Session ${sessionId} has rejected connection. (${negativeReason})` );
-    canConnect = true;
-    return;
+    const [connectionAllowed, negativeReason] = coroutine.yield() as LuaTuple<[boolean, string]>;
+    if ( !connectionAllowed ) 
+    {
+      RaposoConsole.Warn( `Server has rejected connection: ${negativeReason}` );
+      canConnect = true;
+      return;
+    }
   }
 
   defaultEnvironment.entity?.murderAllFuckers();
 
   task.wait( CONNECTION_STEP_COOLDOWN );
 
-  SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_MapReady], { sessionId }, undefined );
+  startNetworkPacket( { id: SERVER_CONNECTION_ID, context: defaultNetworkContext, unreliable: false } );
+  writeBufferU8( ConnectionSteps.Ready );
+  finishNetworkPacket();
+
+  {
+    const [connectionAllowed, negativeReason] = coroutine.yield() as LuaTuple<[boolean, string]>;
+    if ( !connectionAllowed ) 
+    {
+      RaposoConsole.Warn( `Server has rejected connection: ${negativeReason}` );
+      canConnect = true;
+      return;
+    }
+  }
 
   canConnect = true;
   currentConnectionThread = undefined;
 
-  clientSessionConnected.Fire( sessionId );
+  RaposoConsole.Warn( "CONNECTED!" );
+  RaposoConsole.Warn( "CONNECTED!" );
+  RaposoConsole.Warn( "CONNECTED!" );
+  RaposoConsole.Warn( "CONNECTED!" );
+  RaposoConsole.Warn( "CONNECTED!" );
+  RaposoConsole.Warn( "CONNECTED!" );
+
+  clientSessionConnected.Fire();
 }
 
 export function clientCreateLocalSession() 
@@ -72,16 +88,16 @@ export function clientCreateLocalSession()
   const defaultEnvironment = GameEnvironment.GetDefaultEnvironment();
   const serverInst = new GameEnvironment( "local", true );
 
-  serverInst.network.remoteEnabled = false;
-  const serverSessionConnection = serverInst.network.packetPosted.Connect( packet => 
+  serverInst.netctx.postRemote = false;
+  const serverSessionConnection = serverInst.netctx.onNetworkPosted.Connect( packet => 
   {
-    defaultEnvironment.network.InsertPacket( packet, Players.LocalPlayer );
+    defaultEnvironment.netctx.Insert( Players.LocalPlayer, packet );
   } );
 
-  defaultEnvironment.network.remoteEnabled = false;
-  const clientSessionConnection = defaultEnvironment.network.packetPosted.Connect( packet => 
+  defaultEnvironment.netctx.postRemote = false;
+  const clientSessionConnection = defaultEnvironment.netctx.onNetworkPosted.Connect( packet => 
   {
-    serverInst.network.InsertPacket( packet, undefined );
+    serverInst.netctx.Insert( undefined, packet );
   } );
 
   const connection = DISCONNECT_LOCAL.Connect( () => 
@@ -94,7 +110,7 @@ export function clientCreateLocalSession()
     serverSessionConnection.Disconnect();
     clientSessionConnection.Disconnect();
 
-    defaultEnvironment.network.remoteEnabled = true;
+    defaultEnvironment.netctx.postRemote = true;
 
     connection.Disconnect();
   } );
@@ -113,21 +129,6 @@ export function clientCreateLocalSession()
   } );
 }
 
-export function FetchServers() 
-{
-  assert( RunService.IsClient(), "Function can only be called from the client." );
-  assert( !currentServerListFetchThread, "Function on cooldown." );
-
-  currentServerListFetchThread = coroutine.running();
-
-  startBufferCreation();
-  SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_FetchServers], {}, undefined );
-
-  const [serversInfo] = coroutine.yield() as LuaTuple<[ServerListingInfo[]]>;
-
-  return serversInfo;
-}
-
 // # Execution
 new ConsoleFunctionCallback( ["disconnect", "dc"], [] )
   .setDescription( "Disconnects from the current session." )
@@ -137,93 +138,116 @@ new ConsoleFunctionCallback( ["disconnect", "dc"], [] )
 
     DISCONNECT_LOCAL.Fire();
 
-    startBufferCreation();
-    SendStandardMessage( "disconnect_request", {}, undefined );
+    startNetworkPacket( { id: "disconnect_request", context: defaultNetworkContext, unreliable: false } );
+    writeBufferString( "sessionIds" );
+    finishNetworkPacket();
   } );
 
 new ConsoleFunctionCallback( ["connect"], [{ name: "id", type: "string" }] )
   .setDescription( "Attempts to connect to a multiplayer session." )
-  .setCallback( ( ctx ) => 
-  {
-    const sessionId = ctx.getArgument( "id", "string" ).value;
+  .setCallback( ( ctx ) => clientConnectToServerSession() );
 
-    ctx.Reply( `Connecting to session: ${sessionId}...` );
-    if ( sessionId === "local" )
-      clientCreateLocalSession();
-    else
-      clientConnectToServerSession( sessionId );
-  } );
+new ConsoleFunctionCallback( ["connectlocal"], [{ name: "id", type: "string" }] )
+  .setDescription( "Attempts to connect to a multiplayer session." )
+  .setCallback( ( ctx ) => clientCreateLocalSession() );
 
 // Connection requests
 if ( RunService.IsServer() )
-  ListenStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], ( sender, obj ) => 
+  defaultNetworkContext.ListenServer( SERVER_CONNECTION_ID, ( sender, reader ) => 
   {
     if ( !sender ) return;
 
-    const sessionId = tostring( obj.sessionId );
+    const connectionStep = reader.u8();
+    const environment = GameEnvironment.GetDefaultEnvironment();
 
-    const targetSession = GameEnvironment.runningInstances.get( sessionId );
-
-    if ( !targetSession ) 
+    const cancelStep = ( reason: string ) =>
     {
-      SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: false, message: `Unknown session ${sessionId}` }, sender );
+      usersInConnectionProcess.delete( sender.UserId );
+
+      startNetworkPacket( { id: SERVER_CONNECTION_ID, context: defaultNetworkContext, players: [sender], unreliable: false } );
+      writeBufferBool( false );
+      writeBufferString( reason );
+      finishNetworkPacket();
+    };
+
+    const confirmStep = () =>
+    {
+      startNetworkPacket( { id: SERVER_CONNECTION_ID, context: defaultNetworkContext, players: [sender], unreliable: false } );
+      writeBufferBool( true );
+      writeBufferString( "Y E S." );
+      finishNetworkPacket();
+    };
+
+    if ( environment.blockedPlayers.has( sender.UserId ) )
+    {
+      cancelStep( `User is blocked from the session: ${environment.blockedPlayers.get( sender.UserId )}` );
       return;
     }
 
-    if ( targetSession.blockedPlayers.has( sender.UserId ) ) 
-    {
-      SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: false, message: tostring( targetSession.blockedPlayers.get( sender.UserId ) ) }, sender );
+    RaposoConsole.Info( "CONNECTION STEP:", ConnectionSteps[connectionStep] );
+    RaposoConsole.Info( "USER ON PROCESS:", usersInConnectionProcess.has( sender.UserId ) );
 
+    if ( connectionStep === ConnectionSteps.JoinRequest ) 
+    {
+      if ( usersInConnectionProcess.has( sender.UserId ) )
+      {
+        cancelStep( "User is already at a connection step." );
+        return;
+      }
+
+      usersInConnectionProcess.add( sender.UserId );
+      RaposoConsole.Info( "USER ADDED TO PROCESS!", usersInConnectionProcess.has( sender.UserId ) );
+
+      confirmStep();
       return;
     }
 
-    SendStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], { success: true, message: "" }, sender );
+    if ( connectionStep === ConnectionSteps.Ready )
+    {
 
-    usersInConnectionProcess.add( sender );
+      if ( !usersInConnectionProcess.has( sender.UserId ) ) 
+      {
+        cancelStep( "User did not start a connection process." );
+        return;
+      }
+
+      usersInConnectionProcess.delete( sender.UserId );
+      environment.RegisterPlayer( sender );
+      confirmStep();
+      return;
+    }
   } );
 
 if ( RunService.IsClient() )
-  ListenStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_Request], ( sender, obj ) => 
+  defaultNetworkContext.ListenClient( SERVER_CONNECTION_ID, ( reader ) => 
   {
-    const isAllowed = obj.success ?? false;
-    const rejectReason = tostring( obj.message );
+    const isAllowed = reader.bool();
+    const rejectReason = reader.string();
+
+    RaposoConsole.Info( "Server connection reply received:", currentConnectionThread, isAllowed, rejectReason );
 
     if ( !currentConnectionThread )
       return;
 
+
     coroutine.resume( currentConnectionThread, isAllowed, rejectReason );
-  } );
-
-// Finalize connection
-if ( RunService.IsServer() )
-  ListenStandardMessage( SessionConnectionIds[SessionConnectionIds.servercon_MapReady], ( sender, obj ) => 
-  {
-    if ( !sender ) return;
-
-    const sessionId = tostring( obj.sessionId );
-
-    const targetSession = GameEnvironment.runningInstances.get( sessionId );
-    if ( !targetSession || !usersInConnectionProcess.has( sender ) ) return;
-
-    targetSession.RegisterPlayer( sender );
-    usersInConnectionProcess.delete( sender );
   } );
 
 // Handling disconnections
 if ( RunService.IsClient() )
-  ListenStandardMessage( "server_disconnected", ( _, content ) => 
+  defaultNetworkContext.ListenClient( "session_disconnected", reader => 
   {
-    const reason = tostring( content.reason );
+    const reason = reader.string();
 
-    clientSessionDisconnected.Fire( reason, reason );
+    clientSessionDisconnected.Fire( reason );
 
-    RaposoConsole.Warn( "Disconnected from session. Reason:", reason );
+    RaposoConsole.Warn( "Disconnected from session:", reason );
 
     GameEnvironment.GetDefaultEnvironment().entity.murderAllFuckers();
   } );
 
 if ( RunService.IsServer() )
-  ListenStandardMessage( "disconnect_request", ( sender ) => 
+  defaultNetworkContext.ListenServer( "disconnect_request", sender => 
   {
     if ( !sender ) return;
 
@@ -231,56 +255,4 @@ if ( RunService.IsServer() )
 
     for ( const session of sessionList )
       session.RemovePlayer( sender, "Disconnected by user." );
-  } );
-
-// Fetching server list
-if ( RunService.IsServer() )
-  ListenStandardMessage( "game_getservers", ( sender, bfr ) => 
-  {
-    if ( !sender ) return;
-
-    startBufferCreation();
-    writeBufferU8( GameEnvironment.runningInstances.size() );
-    for ( const [serverId, inst] of GameEnvironment.runningInstances ) 
-    {
-      writeBufferString( serverId );
-
-      writeBufferU8( inst.players.size() );
-      for ( const user of inst.players )
-        writeBufferU64( user.UserId );
-    }
-    SendStandardMessage( "game_getservers_reply", { list: finalizeBufferCreation() }, sender );
-  } );
-
-// Receiving server list
-if ( RunService.IsClient() )
-  ListenStandardMessage( "game_getservers_reply", ( sender, obj ) => 
-  {
-    const reader = BufferReader( obj.list as buffer );
-    const serverList: ServerListingInfo[] = [];
-    const serversAmount = reader.u8();
-
-    for ( let i = 0; i < serversAmount; i++ ) 
-    {
-      const serverId = reader.string();
-      const playersAmount = reader.u8();
-
-      const players: Player[] = [];
-
-      for ( let i = 0; i < playersAmount; i++ ) 
-      {
-        const user = Players.GetPlayerByUserId( reader.u64() );
-        if ( !user ) continue;
-
-        players.push( user );
-      }
-
-      serverList.push( {
-        sessionId: serverId,
-        players: players,
-      } );
-    }
-
-    if ( currentServerListFetchThread )
-      coroutine.resume( currentServerListFetchThread, serverList );
   } );

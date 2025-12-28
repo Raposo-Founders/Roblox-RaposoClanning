@@ -4,7 +4,6 @@ import { InitializeCommands } from "cmd";
 import StartControllers from "controllers";
 import { UpdateCameraLoop } from "controllers/CameraController";
 import GameEnvironment from "core/GameEnvironment";
-import { ListenStandardMessage } from "core/NetworkModel";
 import { requireEntities } from "entities";
 import { modulesFolder, uiFolder } from "folders";
 import { gameValues } from "gamevalues";
@@ -13,7 +12,6 @@ import { GetCreatorGroupInfo, GetGameName } from "providers/GroupsProvider";
 import StartSystems from "systems";
 import ChatSystem from "systems/ChatSystem";
 import { CommandLine } from "UI/cmdline";
-import { ConsoleCommandsLogs } from "UI/cmdline/logs";
 import { FairzoneCounter } from "UI/hud/fairzonetimer";
 import { FairzoneTopDisplay } from "UI/hud/fairzonetopdisplay";
 import { KillfeedDisplay } from "UI/hud/killfeedDisplay";
@@ -88,7 +86,7 @@ _G.Raposo = {
   Environment: {
     Folders: import("folders").expect(),
     Sessions: import("core/GameEnvironment").expect(),
-    Network: import("core/NetworkModel").expect(),
+    Network: import("core/Network").expect(),
     util: {
       BufferReader: BufferReader,
       BufferWriter: import("util/bufferwriter").expect(),
@@ -104,7 +102,7 @@ InitializeCommands();
 
 GameEnvironment.BindCallbackToEnvironmentCreation(env => {
   if (RunService.IsClient()) {
-    RunService.BindToRenderStep(`${env.id}_replicationReceive`, 1, dt => env.network.ProcessReceivedPackets());
+    // RunService.BindToRenderStep(`${env.id}_replicationReceive`, 1, dt => env.netctx.ProcessReceivedPackets());
     RunService.BindToRenderStep(`${env.id}_tickUpdateConnection`, 2, dt => env.lifecycle.FireTickUpdate(dt));
     RunService.BindToRenderStep(`${env.id}_updateConnection`, 3, dt => env.lifecycle.FireUpdate(dt));
     RunService.BindToRenderStep(`${env.id}_lateUpdateConnection`, 999, dt => env.lifecycle.FireLateUpdate(dt));
@@ -112,7 +110,6 @@ GameEnvironment.BindCallbackToEnvironmentCreation(env => {
 
   if (RunService.IsServer()) {
     const connection = RunService.PostSimulation.Connect(dt => {
-      env.network.ProcessReceivedPackets();
       env.lifecycle.FireTickUpdate(dt);
     });
 
@@ -157,13 +154,13 @@ if (RunService.IsServer()) {
 }
 
 if (RunService.IsClient()) {
-  ListenStandardMessage(gameValues.cmdnetinfo, (_, obj) => {
-    const message = tostring(obj.message);
+  // ListenStandardMessage(gameValues.cmdnetinfo, (_, obj) => {
+  //   const message = tostring(obj.message);
 
-    RaposoConsole.Info(message);
-    ChatSystem.sendSystemMessage(message);
-  });
-  
+  //   RaposoConsole.Info(message);
+  //   ChatSystem.sendSystemMessage(message);
+  // });
+
   // Build interface
   // Shared UI
   defaultRoot.render(<>
@@ -216,7 +213,7 @@ if (RunService.IsClient()) {
     <NotificationsDisplay />
 
     <CommandLine />
-    <ConsoleCommandsLogs />
+    {/* <ConsoleCommandsLogs /> */}
 
     {/* <ChatBar /> */}
     {/* <ChatButton /> */}

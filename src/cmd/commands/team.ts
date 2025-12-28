@@ -1,14 +1,14 @@
 import { ConsoleFunctionCallback } from "cmd/cvar";
 import { getPlayersFromTeam } from "controllers/PlayerController";
 import GameEnvironment from "core/GameEnvironment";
-import { NetworkPacket } from "core/NetworkModel";
+import { finishNetworkPacket, startNetworkPacket } from "core/Network";
 import PlayerEntity from "entities/PlayerEntity";
 import { PlayerTeam } from "gamevalues";
 import { gameValues } from "gamevalues";
 import { GetCreatorGroupInfo } from "providers/GroupsProvider";
 import ChatSystem from "systems/ChatSystem";
 import { colorTable } from "UI/values";
-import { writeBufferString, writeBufferU16, writeBufferU8 } from "util/bufferwriter";
+import { finalizeBufferCreation, writeBufferString, writeBufferU16, writeBufferU8 } from "util/bufferwriter";
 
 // # Constants & variables
 const CMD_INDEX_NAME = "cmd_team";
@@ -19,7 +19,7 @@ GameEnvironment.BindCallbackToEnvironmentCreation( env =>
 {
   if ( !env.isServer ) return;
 
-  env.network.ListenPacket( CMD_INDEX_NAME, ( sender, reader ) => 
+  env.netctx.ListenServer( CMD_INDEX_NAME, ( sender, reader ) => 
   {
     if ( !sender || !sender.GetAttribute( gameValues.modattr ) ) return;
 
@@ -122,9 +122,9 @@ new ConsoleFunctionCallback( ["team"], [{ name: "player", type: "player" }, { na
 
     for ( const ent of targetPlayers ) 
     {
-      const packet = new NetworkPacket( CMD_INDEX_NAME );
+      startNetworkPacket( { id: CMD_INDEX_NAME, context: ctx.env.netctx, unreliable: false } );
       writeBufferU16( ent.id );
       writeBufferU8( PlayerTeam[team] );
-      ctx.env.network.SendPacket( packet );
+      finishNetworkPacket();
     }
   } );
